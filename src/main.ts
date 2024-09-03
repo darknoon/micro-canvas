@@ -6,7 +6,7 @@ const parent = document.querySelector<HTMLDivElement>('#app')!;
 parent.innerHTML = `
   <div id="topBar"></div>
   <div id="canvasWrapper" class="flex justify-center items-center h-[calc(100vh-50px)]">
-    <div id="canvas" class="w-[512px] h-[512px] bg-slate-50"></div>
+    <div id="canvas" class="w-[512px] h-[512px] bg-white dark:bg-gray-400 rounded-lg border overflow-clip"></div>
   </div>
 `;
 
@@ -14,7 +14,7 @@ class Toolbar {
   constructor(private topBar: HTMLElement) {
     this.topBar.innerHTML = '';
     this.topBar.className =
-      'h-[50px] w-full bg-gray-100 flex items-center justify-between px-4 bg-gray-100 text-sm';
+      'h-[50px] w-full bg-gray-100 flex items-center justify-between px-4 bg-gray-50 text-sm';
 
     const title = document.createElement('h1');
     title.textContent = 'Canvas Editor';

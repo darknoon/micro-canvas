@@ -1,25 +1,17 @@
 import { buildDotPatternImage } from './dotGrid';
+import { AABB, intersectAABB, Point2D } from './geom';
+import { Bezier } from './objects/bezier';
 import { RedCircle } from './objects/redCircle';
 
 export const GRID_SIZE = 16;
-
-export interface AABB {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface Point2D {
-  x: number;
-  y: number;
-}
+export const DEBUG = true;
 
 export type CanvasID = number;
 
 export interface CanvasObject {
   id: CanvasID;
-  boundingBox: AABB;
+  readonly boundingBox: AABB;
+  translation: Point2D;
   draw(ctx: CanvasRenderingContext2D): void;
 }
 
@@ -44,16 +36,21 @@ export class CanvasEditor implements Disposable {
   // Reused for drag events, stores previous mouse position within our element
   private lastDragX?: number;
   private lastDragY?: number;
+  private eventCleanups: (() => void)[] = [];
   // State vars
   private isMiddleDragging: boolean = false;
   private isSelectionDragging: boolean = false;
   private selectionDraggingOrigin?: Point2D | null = null;
+  private isObjectDragging: boolean = false;
 
   private selection: CanvasID[] = [];
   private objects: CanvasObject[];
   // Store objects that unregister event listeners
   private disposers: (() => void)[] = [];
   private nextId = 1;
+
+  // Factories object maps from a name of a subtype of CanvasObject to a function that creates an instance of that subtype
+  private factories: { circle: () => RedCircle; bezier: () => Bezier };
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -77,7 +74,12 @@ export class CanvasEditor implements Disposable {
     if (!pattern) throw new Error('Failed to create canvas background');
     this.pattern = pattern;
 
-    this.objects = [new RedCircle(this.nextId++)];
+    this.factories = {
+      circle: () => new RedCircle(this.nextId++),
+      bezier: () => new Bezier(this.nextId++),
+    };
+
+    this.objects = [this.factories.circle(), this.factories.bezier()];
 
     this.container.appendChild(this.canvas);
 
@@ -93,6 +95,10 @@ export class CanvasEditor implements Disposable {
     console.log('Wheel event:', deltaX, deltaY);
     this.scrollX += deltaX;
     this.scrollY += deltaY;
+    // round to nearest retina pixel
+    const dpr = this.devicePixelRatio;
+    this.scrollX = Math.round(this.scrollX * dpr) / dpr;
+    this.scrollY = Math.round(this.scrollY * dpr) / dpr;
     this.redraw();
   }
 
@@ -114,28 +120,57 @@ export class CanvasEditor implements Disposable {
     };
   }
 
+  private beginEvent() {
+    // Run any cleanup functions from previous events
+    if (this.eventCleanups.length > 0) {
+      console.error('Event cleanup not run');
+      this.eventCleanups.forEach(cleanup => cleanup());
+    }
+    this.eventCleanups = [];
+  }
   private onMouseDown(e: MouseEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e);
     if (e.button === 1) {
       // Middle mouse button
+
       this.isMiddleDragging = true;
       this.lastDragX = localX;
       this.lastDragY = localY;
 
       // Listen on the window to capture mouse move/up events outside the canvas
+      this.beginEvent();
       const onMouseMove = this.onMiddleDrag.bind(this);
       const onMouseUp = this.onMiddleDragUp.bind(this);
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
-      this.disposers.push(() => {
+      this.eventCleanups.push(() => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
       });
     } else if (e.button === 0) {
       // Left mouse button
-      const object = this.hitTest(e.offsetX, e.offsetY);
+      const canvasX = localX + this.scrollX;
+      const canvasY = localY + this.scrollY;
+      const object = this.hitTest(canvasX, canvasY);
       if (object) {
-        console.log('Clicked on object:', object);
+        if (!this.selection.includes(object.id)) {
+          // Reset selection if you drag an object that is not selected
+          this.selection = [object.id];
+        }
+        console.log('Mouse down on object:', object);
+        this.isObjectDragging = true;
+        this.lastDragX = localX;
+        this.lastDragY = localY;
+
+        this.beginEvent();
+        const onMouseMove = this.onObjectDrag.bind(this);
+        const onMouseUp = this.onObjectDragUp.bind(this);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        this.eventCleanups.push(() => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        });
       } else {
         this.isSelectionDragging = true;
         this.lastDragX = localX;
@@ -145,11 +180,12 @@ export class CanvasEditor implements Disposable {
         this.selectionDraggingOrigin = { x: localX + this.scrollX, y: localY + this.scrollY };
 
         // Listen on the window to capture mouse move/up events outside the canvas
+        this.beginEvent();
         const onMouseMove = this.onSelectionDrag.bind(this);
         const onMouseUp = this.onSelectionDragUp.bind(this);
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
-        this.disposers.push(() => {
+        this.eventCleanups.push(() => {
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
         });
@@ -171,13 +207,39 @@ export class CanvasEditor implements Disposable {
     };
   }
 
+  private onObjectDrag(e: MouseEvent): void {
+    if (!this.isObjectDragging) throw new Error('Object dragging is not active');
+
+    const { x: localX, y: localY } = this.outerCoords(e);
+    const deltaX = localX - this.lastDragX!;
+    const deltaY = localY - this.lastDragY!;
+
+    // Update the position of all selected objects
+    for (const id of this.selection) {
+      const object = this.objects.find(obj => obj.id === id);
+      if (object) {
+        object.translation.x += deltaX;
+        object.translation.y += deltaY;
+      }
+    }
+
+    this.lastDragX = localX;
+    this.lastDragY = localY;
+    this.redraw();
+  }
+
+  private onObjectDragUp(): void {
+    this.isObjectDragging = false;
+    this.redraw();
+  }
+
   private onSelectionDrag(e: MouseEvent): void {
     if (this.isSelectionDragging) {
       const b = this.selectionDraggingOrigin;
       if (!b) throw new Error('Selection dragging origin is null');
 
       // Clear previous selection
-      this.selection = [...this.selection];
+      this.selection = [];
       const { x: localX, y: localY } = this.outerCoords(e);
       // Store the current event target as lastDragX and lastDragY
       this.lastDragX = localX;
@@ -185,19 +247,13 @@ export class CanvasEditor implements Disposable {
 
       // Check each object for intersection with the selection box
       for (const object of this.objects) {
-        if (this.intersectAABB(this.selectionBoundingBox, object.boundingBox)) {
+        if (intersectAABB(this.selectionBoundingBox, object.boundingBox)) {
           this.selection.push(object.id);
         }
       }
 
       this.redraw();
     }
-  }
-
-  private intersectAABB(a: AABB, b: AABB): boolean {
-    return (
-      a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-    );
   }
 
   private onSelectionDragUp(): void {
@@ -321,6 +377,9 @@ export class CanvasEditor implements Disposable {
         10,
         60
       );
+    }
+    if (this.isObjectDragging) {
+      this.ctx.fillText(`Object dragging at: (${this.lastDragX}, ${this.lastDragY})`, 10, 80);
     }
   }
 
