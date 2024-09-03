@@ -3,6 +3,11 @@ import { AABB, intersectAABB, Point2D } from './geom';
 import { Bezier } from './objects/bezier';
 import { RedCircle } from './objects/redCircle';
 
+import resolveConfig from 'tailwindcss/resolveConfig';
+import tailwindConfigData from '../tailwind.config';
+
+const tw = resolveConfig(tailwindConfigData);
+
 export const GRID_SIZE = 16;
 export const DEBUG = true;
 
@@ -18,6 +23,13 @@ export interface CanvasObject {
 export interface Disposable {
   dispose(): void;
 }
+
+const colors = {
+  canvasBackground: tw.theme.colors.white,
+  canvasBackgroundDot: tw.theme.colors.gray[300],
+  selectionBox: tw.theme.colors.blue[500],
+  debugText: tw.theme.colors.black,
+};
 
 export class CanvasEditor implements Disposable {
   /**
@@ -68,7 +80,7 @@ export class CanvasEditor implements Disposable {
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
 
     // Create a pattern for the background
-    const patternCanvas = buildDotPatternImage(dpr);
+    const patternCanvas = buildDotPatternImage(dpr, colors.canvasBackgroundDot);
     // Set the background pattern
     const pattern = this.ctx.createPattern(patternCanvas, 'repeat');
     if (!pattern) throw new Error('Failed to create canvas background');
@@ -92,7 +104,6 @@ export class CanvasEditor implements Disposable {
     const deltaX = event.deltaX;
     const deltaY = event.deltaY;
     // Implement zooming or panning logic here
-    console.log('Wheel event:', deltaX, deltaY);
     this.scrollX += deltaX;
     this.scrollY += deltaY;
     // round to nearest retina pixel
@@ -124,10 +135,16 @@ export class CanvasEditor implements Disposable {
     // Run any cleanup functions from previous events
     if (this.eventCleanups.length > 0) {
       console.error('Event cleanup not run');
-      this.eventCleanups.forEach(cleanup => cleanup());
+      this.endEvent();
     }
     this.eventCleanups = [];
   }
+
+  private endEvent() {
+    this.eventCleanups.forEach(cleanup => cleanup());
+    this.eventCleanups = [];
+  }
+
   private onMouseDown(e: MouseEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e);
     if (e.button === 1) {
@@ -157,7 +174,6 @@ export class CanvasEditor implements Disposable {
           // Reset selection if you drag an object that is not selected
           this.selection = [object.id];
         }
-        console.log('Mouse down on object:', object);
         this.isObjectDragging = true;
         this.lastDragX = localX;
         this.lastDragY = localY;
@@ -230,6 +246,7 @@ export class CanvasEditor implements Disposable {
 
   private onObjectDragUp(): void {
     this.isObjectDragging = false;
+    this.endEvent();
     this.redraw();
   }
 
@@ -259,6 +276,7 @@ export class CanvasEditor implements Disposable {
   private onSelectionDragUp(): void {
     this.isSelectionDragging = false;
     this.selectionDraggingOrigin = null;
+    this.endEvent();
     this.redraw();
   }
 
@@ -278,6 +296,7 @@ export class CanvasEditor implements Disposable {
   private onMiddleDragUp(e: MouseEvent): void {
     if (e.button === 1 /* Middle mouse button */) {
       this.isMiddleDragging = false;
+      this.endEvent();
       this.redraw();
     }
   }
