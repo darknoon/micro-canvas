@@ -27,6 +27,9 @@ export interface Disposable {
 const colors = {
   canvasBackground: tw.theme.colors.white,
   canvasBackgroundDot: tw.theme.colors.gray[300],
+  selectionDragBoxStroke: tw.theme.colors.gray[500],
+  selectionDragBoxFill: tw.theme.colors.gray[200],
+  selectionDragBoxFillOpacity: 0.25,
   selectionBox: tw.theme.colors.blue[500],
   debugText: tw.theme.colors.black,
 };
@@ -361,7 +364,7 @@ export class CanvasEditor implements Disposable {
     }
 
     // Draw selection around the currently selected objects
-    this.ctx.strokeStyle = 'blue';
+    this.ctx.strokeStyle = colors.selectionBox;
     this.ctx.lineWidth = 1;
     for (const id of this.selection) {
       const object = this.objects.find(o => o.id === id);
@@ -376,9 +379,13 @@ export class CanvasEditor implements Disposable {
       const box = this.selectionBoundingBox;
       if (!box) return;
       this.ctx.save();
-      this.ctx.strokeStyle = 'red';
+      this.ctx.fillStyle = colors.selectionDragBoxFill;
+      this.ctx.strokeStyle = colors.selectionDragBoxStroke;
       this.ctx.lineWidth = 1;
       this.ctx.strokeRect(box.x, box.y, box.width, box.height);
+      this.ctx.globalAlpha = colors.selectionDragBoxFillOpacity;
+      this.ctx.fillRect(box.x, box.y, box.width, box.height);
+      this.ctx.globalAlpha = 1.0;
       this.ctx.restore();
     }
     // restore matrix
