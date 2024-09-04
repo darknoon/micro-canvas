@@ -1,5 +1,8 @@
 import { Disposable } from './interface/disposable';
-import arrow from './cursors/arrow.svg';
+import arrow from './icons/tools/arrow.svg';
+import pen from './icons/tools/pen.svg';
+import pencil from './icons/tools/pencil.svg';
+import hand from './icons/tools/hand.svg';
 
 export interface ToolbarItem {
   iconSVG?: string;
@@ -31,9 +34,9 @@ export class ToolShelf extends EventTarget implements Disposable {
     super();
     this.items = [
       { id: Tool.MOVE, label: 'move', iconSVG: arrow, shortcut: 'v' },
-      { id: Tool.HAND, label: 'Hand', iconSVG: '✋', shortcut: 'h' },
-      { id: Tool.PEN, label: 'Pen', iconSVG: '🖋', shortcut: 'p' },
-      { id: Tool.PENCIL, label: 'Pencil', iconSVG: '✏️', shortcut: 'P' },
+      { id: Tool.HAND, label: 'Hand', iconSVG: hand, shortcut: 'h' },
+      { id: Tool.PEN, label: 'Pen', iconSVG: pen, shortcut: 'p' },
+      { id: Tool.PENCIL, label: 'Pencil', iconSVG: pencil, shortcut: 'P' },
     ];
 
     console.log('ToolShelf', arrow);
