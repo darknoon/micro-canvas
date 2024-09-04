@@ -360,7 +360,7 @@ export class CanvasEditor implements Disposable {
     this.ctx.fillStyle = this.pattern;
     // Offset by scroll position modulo the grid size to ensure that the dots scroll
     this.ctx.translate((-scrollX * dpr) % (GRID_SIZE * dpr), (-scrollY * dpr) % (GRID_SIZE * dpr));
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillRect(0, 0, this.canvas.width + GRID_SIZE, this.canvas.height + GRID_SIZE);
     this.ctx.restore();
 
     // translate matrix
