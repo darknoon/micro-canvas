@@ -18,6 +18,7 @@ export enum Tool {
 /**
  * Bottom toolbar that contains the main actions of the app.
  * You can add listeners to the toolSelected event to know when a tool is selected.
+ * dispatches 'toolSelected' event when the selected tool id changes.
  */
 export class ToolShelf extends EventTarget implements Disposable {
   private items: ToolbarItem[] = [];
