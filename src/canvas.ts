@@ -72,6 +72,7 @@ export class CanvasEditor implements Disposable {
   // Selection should be a single object. We are editing a specific bezier curve.
   private isEditingBezier: boolean = false;
   private bezierSelection: BezierSubselection | null = null;
+  private isDraggingBezierPoints: boolean = false;
 
   /// Scene graph
   // Factories object maps from a name of a subtype of CanvasObject to a function that creates an instance of that subtype
@@ -233,17 +234,26 @@ export class CanvasEditor implements Disposable {
           if (!this.bezierSelection) throw new Error('Expected bezier selection to be set');
           const wasSelected = this.bezierSelection.get(i, j);
           // copy
-          if (!wasSelected) {
-            const bzs = this.bezierSelection.copy();
-            bzs.set(true, i, j);
-            this.bezierSelection = bzs;
+          this.isDraggingBezierPoints = true;
+          this.lastDragX = localX;
+          this.lastDragY = localY;
+          this.beginEvent();
+          const onMouseMove = this.onBezierPointDrag.bind(this);
+          const onMouseUp = this.onBezierPointDragUp.bind(this);
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+          this.eventCleanups.push(() => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+          });
+          if (wasSelected) {
+            // Start dragging the bezier point
           } else {
-            // clear all except this one
+            // Select just this point
             const bzs = new MultiArray([bzo.controlPoints.length, 3], false);
             bzs.set(true, i, j);
             this.bezierSelection = bzs;
           }
-          console.log('selected', hit, this.bezierSelection);
           this.redraw();
         } else {
           // Clicked something that is not a control point. Ignore.
@@ -368,6 +378,71 @@ export class CanvasEditor implements Disposable {
   private onSelectionDragUp(): void {
     this.isSelectionDragging = false;
     this.selectionDraggingOrigin = null;
+    this.endEvent();
+    this.redraw();
+  }
+
+  private onBezierPointDrag(e: MouseEvent): void {
+    if (!this.isDraggingBezierPoints) return;
+
+    const { x: localX, y: localY } = this.outerCoords(e);
+    const deltaX = localX - this.lastDragX!;
+    const deltaY = localY - this.lastDragY!;
+
+    const bzo = this.objects.find(o => o.id === this.selection[0]);
+    if (!bzo || !(bzo instanceof Bezier)) {
+      throw new Error('Expected selected object to be a Bezier');
+    }
+
+    this.moveSelectedBezierPoints(deltaX, deltaY);
+
+    this.lastDragX = localX;
+    this.lastDragY = localY;
+    this.redraw();
+  }
+
+  private moveSelectedBezierPoints(deltaX: number, deltaY: number): void {
+    const bzo = this.objects.find(o => o.id === this.selection[0]);
+    if (!bzo || !(bzo instanceof Bezier)) {
+      throw new Error('Expected selected object to be a Bezier');
+    }
+    if (!this.bezierSelection) {
+      throw new Error('Expected bezier selection to be set');
+    }
+    const s = this.bezierSelection;
+
+    const newControlPoints = bzo.controlPoints.map((_point, i) => {
+      // copy point
+      const point = { ..._point };
+      const s0 = s.get(i, 0);
+      const p0 = i > 0 ? s.get(i - 1, 0) : false;
+      if (s0) {
+        point.x += deltaX;
+        point.y += deltaY;
+      }
+      if (point.type === 'quadraticCurveTo' && s.get(i, 1)) {
+        point.controlX += deltaX;
+        point.controlY += deltaY;
+      } else if (point.type === 'cubicCurveTo') {
+        if (p0 || s.get(i, 1)) {
+          point.controlX1 += deltaX;
+          point.controlY1 += deltaY;
+        }
+        if (s0 || s.get(i, 2)) {
+          point.controlX2 += deltaX;
+          point.controlY2 += deltaY;
+        }
+      }
+      return point;
+    });
+
+    // Use setter method instead of direct assignment
+    bzo.controlPoints = newControlPoints;
+    this.redraw();
+  }
+
+  private onBezierPointDragUp(): void {
+    this.isDraggingBezierPoints = false;
     this.endEvent();
     this.redraw();
   }
@@ -527,13 +602,11 @@ export class CanvasEditor implements Disposable {
           drawCurvePoint(point.x, point.y, s0);
           // If either end of this cubic curve segment is selected, draw the control points, also if either control point is selected
           if (s0 || s1 || s2 || p0) {
-            const s1 = this.bezierSelection.get(i, 1);
-            const s2 = this.bezierSelection.get(i, 2);
-            drawControlArm(point.x, point.y, point.controlX1, point.controlY1);
             if (hasPrev) {
               const prevPoint = obj.controlPoints[i - 1];
-              drawControlArm(prevPoint.x, prevPoint.y, point.controlX2, point.controlY2);
+              drawControlArm(prevPoint.x, prevPoint.y, point.controlX1, point.controlY1);
             }
+            drawControlArm(point.x, point.y, point.controlX2, point.controlY2);
             drawControlPoint(point.controlX1, point.controlY1, s1);
             drawControlPoint(point.controlX2, point.controlY2, s2);
           }
@@ -607,15 +680,6 @@ export class CanvasEditor implements Disposable {
   public dispose(): void {
     this.disposers.forEach(d => d());
   }
-}
-
-// Utility function to zip two arrays together, uses the first array as the length of the result
-function zipA<T, U>(a: T[], b: Iterable<U>): [T, U | undefined][] {
-  const bIterator = b[Symbol.iterator]();
-  return a.map(k => {
-    const nextB = bIterator.next();
-    return [k, nextB.value];
-  });
 }
 
 function hitTestBezierControlPoints(

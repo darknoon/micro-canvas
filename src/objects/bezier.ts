@@ -26,7 +26,7 @@ export class Bezier implements CanvasObject {
 
   public translation: Point2D = { x: 0, y: 0 };
 
-  public readonly controlPoints: BezierControlPoint[] = [
+  public controlPoints: BezierControlPoint[] = [
     // Head
     { type: 'lineTo', x: 50, y: 100 },
     {
