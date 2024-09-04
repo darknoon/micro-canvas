@@ -13,7 +13,8 @@ export type BezierControlPoint =
       controlY1: number;
       controlX2: number;
       controlY2: number;
-    };
+    }
+  | { type: 'closePath' };
 
 /** We need an idea of which control points are selected during editing.
  * Each entry is a tuple of whether each of the subpoints are selected.
@@ -94,7 +95,7 @@ export class Bezier implements CanvasObject {
     // Front legs
     { type: 'lineTo', x: 100, y: 250 },
     { type: 'lineTo', x: 80, y: 250 },
-    { type: 'lineTo', x: 50, y: 100 },
+    { type: 'closePath' },
   ];
 
   get boundingBox(): AABB {
@@ -141,6 +142,8 @@ export class Bezier implements CanvasObject {
           point.x,
           point.y
         );
+      } else if (point.type === 'closePath') {
+        ctx.closePath();
       }
     }
     ctx.strokeStyle = 'black';

@@ -414,9 +414,10 @@ export class CanvasEditor implements Disposable {
     const newControlPoints = bzo.controlPoints.map((_point, i) => {
       // copy point
       const point = { ..._point };
+      const { type } = point;
       const s0 = s.get(i, 0);
       const p0 = i > 0 ? s.get(i - 1, 0) : false;
-      if (s0) {
+      if (type !== 'closePath' && s0) {
         point.x += deltaX;
         point.y += deltaY;
       }
@@ -604,7 +605,9 @@ export class CanvasEditor implements Disposable {
           if (s0 || s1 || s2 || p0) {
             if (hasPrev) {
               const prevPoint = obj.controlPoints[i - 1];
-              drawControlArm(prevPoint.x, prevPoint.y, point.controlX1, point.controlY1);
+              if (prevPoint.type !== 'closePath') {
+                drawControlArm(prevPoint.x, prevPoint.y, point.controlX1, point.controlY1);
+              }
             }
             drawControlArm(point.x, point.y, point.controlX2, point.controlY2);
             drawControlPoint(point.controlX1, point.controlY1, s1);
