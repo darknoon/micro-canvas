@@ -16,7 +16,10 @@ const canvasContainerElem = parent.querySelector<HTMLDivElement>('#canvasEditor'
 const topBarElem = parent.querySelector<HTMLDivElement>('#topBar')!;
 const toolbarElem = parent.querySelector<HTMLDivElement>('#toolbar')!;
 
-const topBar = new TopBar(topBarElem);
+// initialize the app and connect the components
+
+// topBar not really doing anything yet
+// const topBar = new TopBar(topBarElem);
 const tools = new ToolShelf(toolbarElem);
 const editor = new CanvasEditor(canvasContainerElem);
 
