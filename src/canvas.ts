@@ -5,6 +5,8 @@ import { RedCircle } from './objects/redCircle';
 
 import resolveConfig from 'tailwindcss/resolveConfig';
 import tailwindConfigData from '../tailwind.config';
+import { Disposable } from './interface/disposable';
+import { Tool } from './toolShelf';
 
 const tw = resolveConfig(tailwindConfigData);
 
@@ -18,10 +20,6 @@ export interface CanvasObject {
   readonly boundingBox: AABB;
   translation: Point2D;
   draw(ctx: CanvasRenderingContext2D): void;
-}
-
-export interface Disposable {
-  dispose(): void;
 }
 
 const colors = {
@@ -66,6 +64,7 @@ export class CanvasEditor implements Disposable {
 
   // Factories object maps from a name of a subtype of CanvasObject to a function that creates an instance of that subtype
   private factories: { circle: () => RedCircle; bezier: () => Bezier };
+  private _activeToolId: Tool = Tool.HAND;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -276,6 +275,15 @@ export class CanvasEditor implements Disposable {
     }
   }
 
+  public get activeToolId(): Tool {
+    return this._activeToolId;
+  }
+
+  public set activeToolId(value: Tool) {
+    this._activeToolId = value;
+    this.redraw();
+  }
+
   private onSelectionDragUp(): void {
     this.isSelectionDragging = false;
     this.selectionDraggingOrigin = null;
@@ -304,6 +312,7 @@ export class CanvasEditor implements Disposable {
     }
   }
 
+  /** Setup the event listers that are always on (not triggered by another event) */
   private setupEventListeners(): void {
     // Use wheel event instead of scroll for canvas
     const onWheel = this.onWheel.bind(this);
@@ -392,20 +401,23 @@ export class CanvasEditor implements Disposable {
     this.ctx.restore();
 
     // Debug info
-    this.ctx.fillStyle = 'black';
-    this.ctx.fillText(`Scroll position: (${scrollX}, ${scrollY})`, 10, 20);
-    if (this.isMiddleDragging) {
-      this.ctx.fillText(`Middle dragging at: (${this.lastDragX}, ${this.lastDragY})`, 10, 40);
-    }
-    if (this.isSelectionDragging) {
-      this.ctx.fillText(
-        `Selection dragging at: last(${this.lastDragX}, ${this.lastDragY}), origin(${this.selectionDraggingOrigin?.x}, ${this.selectionDraggingOrigin?.y})`,
-        10,
-        60
-      );
-    }
-    if (this.isObjectDragging) {
-      this.ctx.fillText(`Object dragging at: (${this.lastDragX}, ${this.lastDragY})`, 10, 80);
+    if (DEBUG) {
+      const tool = this._activeToolId;
+      this.ctx.fillStyle = 'black';
+      this.ctx.fillText(`Tool: ${tool} Scroll position: (${scrollX}, ${scrollY})`, 10, 20);
+      if (this.isMiddleDragging) {
+        this.ctx.fillText(`Middle dragging at: (${this.lastDragX}, ${this.lastDragY})`, 10, 40);
+      }
+      if (this.isSelectionDragging) {
+        this.ctx.fillText(
+          `Selection dragging at: last(${this.lastDragX}, ${this.lastDragY}), origin(${this.selectionDraggingOrigin?.x}, ${this.selectionDraggingOrigin?.y})`,
+          10,
+          60
+        );
+      }
+      if (this.isObjectDragging) {
+        this.ctx.fillText(`Object dragging at: (${this.lastDragX}, ${this.lastDragY})`, 10, 80);
+      }
     }
   }
 
