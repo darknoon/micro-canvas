@@ -1,6 +1,6 @@
 import { buildDotPatternImage } from './dotGrid';
 import { AABB, intersectAABB, Point2D } from './geom';
-import { Bezier, BezierSubselection } from './objects/bezier';
+import { PathLayer, BezierSubselection } from './objects/bezier';
 import { RedCircle } from './objects/redCircle';
 
 import resolveConfig from 'tailwindcss/resolveConfig';
@@ -98,7 +98,7 @@ export class CanvasEditor implements Disposable {
 
   /// Scene graph
   // Factories object maps from a name of a subtype of CanvasObject to a function that creates an instance of that subtype
-  private factories: { circle: () => RedCircle; bezier: () => Bezier };
+  private factories: { circle: () => RedCircle; bezier: () => PathLayer };
   private nextId = 1;
   private selection: CanvasID[] = [];
   private objects: CanvasObject[];
@@ -136,7 +136,7 @@ export class CanvasEditor implements Disposable {
 
     this.factories = {
       circle: () => new RedCircle(this.nextId++),
-      bezier: () => new Bezier(this.nextId++),
+      bezier: () => new PathLayer(this.nextId++),
     };
 
     this.objects = [this.factories.circle(), this.factories.bezier()];
@@ -207,7 +207,7 @@ export class CanvasEditor implements Disposable {
     } else if (e.key === 'Enter') {
       if (this.selection.length === 1) {
         const object = this.objects.find(o => o.id === this.selection[0]);
-        if (object instanceof Bezier) {
+        if (object instanceof PathLayer) {
           this.isEditingBezier = !this.isEditingBezier;
           if (this.isEditingBezier) {
             this.bezierSelection = new MultiArray([object.controlPoints.length, 3], false);
@@ -245,7 +245,7 @@ export class CanvasEditor implements Disposable {
 
       if (this.isEditingBezier) {
         const bzo = this.objects.find(o => o.id === this.selection[0]);
-        if (!bzo || !(bzo instanceof Bezier)) {
+        if (!bzo || !(bzo instanceof PathLayer)) {
           throw new Error('Expected selected object to be a Bezier');
         }
         const hit = hitTestBezierControlPoints(
@@ -416,7 +416,7 @@ export class CanvasEditor implements Disposable {
     const deltaY = localY - this.lastDragY!;
 
     const bzo = this.objects.find(o => o.id === this.selection[0]);
-    if (!bzo || !(bzo instanceof Bezier)) {
+    if (!bzo || !(bzo instanceof PathLayer)) {
       throw new Error('Expected selected object to be a Bezier');
     }
 
@@ -429,7 +429,7 @@ export class CanvasEditor implements Disposable {
 
   private moveSelectedBezierPoints(deltaX: number, deltaY: number): void {
     const bzo = this.objects.find(o => o.id === this.selection[0]);
-    if (!bzo || !(bzo instanceof Bezier)) {
+    if (!bzo || !(bzo instanceof PathLayer)) {
       throw new Error('Expected selected object to be a Bezier');
     }
     if (!this.bezierSelection) {
@@ -572,7 +572,7 @@ export class CanvasEditor implements Disposable {
         throw new Error('Expected exactly one object to be selected in bezier editing mode');
       }
       const obj = this.objects.find(o => o.id === this.selection[0]);
-      if (!obj || !(obj instanceof Bezier)) {
+      if (!obj || !(obj instanceof PathLayer)) {
         throw new Error('Expected selected object to be a Bezier');
       }
       if (this.bezierSelection === null) {
@@ -613,7 +613,9 @@ export class CanvasEditor implements Disposable {
           this.bezierSelection.get(i, 1),
           this.bezierSelection.get(i, 2),
         ]);
-        if (point.type === 'lineTo') {
+        if (point.type === 'moveTo') {
+          drawCurvePoint(point.x, point.y, this.bezierSelection.get(i, 0));
+        } else if (point.type === 'lineTo') {
           const selected = this.bezierSelection.get(i, 0);
           drawCurvePoint(point.x, point.y, selected);
         } else if (point.type === 'quadraticCurveTo') {
@@ -682,7 +684,7 @@ export class CanvasEditor implements Disposable {
     // Debug info
     if (DEBUG) {
       const tool = this._activeToolId;
-      this.ctx.fillStyle = 'black';
+      this.ctx.fillStyle = DS.debugText;
       const bzm = this.isEditingBezier ? 'Béz editing' : '';
       this.ctx.fillText(`Tool: ${tool}, ${bzm} Scroll position: (${scrollX}, ${scrollY})`, 10, 20);
       if (this.isMiddleDragging) {
@@ -719,7 +721,7 @@ export class CanvasEditor implements Disposable {
 }
 
 function hitTestBezierControlPoints(
-  bezier: Bezier,
+  bezier: PathLayer,
   x: number,
   y: number,
   distance: number = 10
@@ -730,7 +732,11 @@ function hitTestBezierControlPoints(
 
   for (let i = 0; i < bezier.controlPoints.length; i++) {
     const point = bezier.controlPoints[i];
-    if (point.type === 'lineTo') {
+    if (point.type === 'moveTo') {
+      if (pointClose(point.x, point.y)) {
+        return [i, 0];
+      }
+    } else if (point.type === 'lineTo') {
       if (pointClose(point.x, point.y)) {
         return [i, 0];
       }
