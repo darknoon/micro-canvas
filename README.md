@@ -6,8 +6,17 @@ goals:
 - act enough like a canvas to make designers relatively comfortable using it
 
 todo:
-- [ ] basic bézier curve drawing
+- [ ] basic bézier curve drawing (via bezier.js)
+  - [ ] correct bounding box
   - [ ] add point on curve
   - [ ] pen tool draw out points
-  - [ ] select & move points
-
+  - [x] select & move points
+- [ ] arrow keys for moving points and shapes
+  - [ ] basic arrow key movement
+  - [ ] shift+arrow keys for moving faster
+- [ ] save/load
+  - [ ] save/load to/from file
+  - [ ] save/load to/from clipboard
+- [ ] inspector panel?
+  - [ ] show selected shape properties
+  - [ ] edit selected shape properties

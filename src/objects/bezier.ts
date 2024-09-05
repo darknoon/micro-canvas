@@ -146,8 +146,10 @@ export class Bezier implements CanvasObject {
         ctx.closePath();
       }
     }
-    ctx.strokeStyle = 'black';
-    ctx.stroke();
+    const currentColor = getComputedStyle(ctx.canvas).getPropertyValue('color');
+    ctx.fillStyle = currentColor;
+    // ctx.stroke();
+    ctx.fill();
     ctx.closePath();
     ctx.restore();
   }

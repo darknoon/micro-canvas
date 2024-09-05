@@ -23,23 +23,45 @@ export interface CanvasObject {
   draw(ctx: CanvasRenderingContext2D): void;
 }
 
-const DS = {
-  canvasBackground: tw.theme.colors.white,
-  canvasBackgroundDot: tw.theme.colors.gray[300],
+const designSystem = {
+  light: {
+    canvasBackground: tw.theme.colors.white,
+    canvasBackgroundDot: tw.theme.colors.gray[300],
 
-  selectionDragBoxStroke: tw.theme.colors.gray[500],
-  selectionDragBoxFill: tw.theme.colors.gray[200],
-  selectionDragBoxFillOpacity: 0.25,
-  selectionBox: tw.theme.colors.blue[500],
+    selectionDragBoxStroke: tw.theme.colors.gray[500],
+    selectionDragBoxFill: tw.theme.colors.gray[200],
+    selectionDragBoxFillOpacity: 0.25,
+    selectionBox: tw.theme.colors.blue[500],
 
-  bezierPointFill: tw.theme.colors.gray[500],
-  bezierPointFillSelected: tw.theme.colors.blue[500],
+    bezierPointFill: tw.theme.colors.gray[500],
+    bezierPointStroke: tw.theme.colors.blue[500],
+    bezierPointFillSelected: tw.theme.colors.blue[500],
 
-  bezierControlPointArmStroke: tw.theme.colors.gray[500],
-  bezierControlPointArmWidth: 1,
-  bezierControlPointWidth: 3,
+    bezierControlPointArmStroke: tw.theme.colors.gray[900],
+    bezierControlPointArmWidth: 1,
+    bezierControlPointWidth: 3,
 
-  debugText: tw.theme.colors.black,
+    debugText: tw.theme.colors.black,
+  },
+  dark: {
+    canvasBackground: tw.theme.colors.gray[900],
+    canvasBackgroundDot: tw.theme.colors.gray[700],
+
+    selectionDragBoxStroke: tw.theme.colors.gray[400],
+    selectionDragBoxFill: tw.theme.colors.gray[700],
+    selectionDragBoxFillOpacity: 0.25,
+    selectionBox: tw.theme.colors.blue[400],
+
+    bezierPointFill: tw.theme.colors.gray[400],
+    bezierPointStroke: tw.theme.colors.blue[400],
+    bezierPointFillSelected: tw.theme.colors.blue[400],
+
+    bezierControlPointArmStroke: tw.theme.colors.gray[400],
+    bezierControlPointArmWidth: 1,
+    bezierControlPointWidth: 3,
+
+    debugText: tw.theme.colors.white,
+  },
 };
 
 export class CanvasEditor implements Disposable {
@@ -100,6 +122,10 @@ export class CanvasEditor implements Disposable {
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
+
+    // resolve query to check if light or dark mode
+    const dmq = window.matchMedia('(prefers-color-scheme: dark)');
+    const DS = dmq.matches ? designSystem.dark : designSystem.light;
 
     // Create a pattern for the background
     const patternCanvas = buildDotPatternImage(dpr, DS.canvasBackgroundDot);
@@ -510,10 +536,15 @@ export class CanvasEditor implements Disposable {
     }
   }
 
+  private get isDarkMode(): boolean {
+    return true;
+  }
+
   private redraw(): void {
     const scrollX = this.scrollX;
     const scrollY = this.scrollY;
     const dpr = this.devicePixelRatio;
+    const DS = this.isDarkMode ? designSystem.dark : designSystem.light;
 
     this.ctx.resetTransform();
 
@@ -555,6 +586,8 @@ export class CanvasEditor implements Disposable {
         this.ctx.arc(x, y, 3, 0, 2 * Math.PI);
         this.ctx.fillStyle = selected ? DS.bezierPointFillSelected : DS.bezierPointFill;
         this.ctx.fill();
+        this.ctx.strokeStyle = DS.bezierPointStroke;
+        this.ctx.stroke();
       };
 
       const drawControlPoint = (x: number, y: number, selected: boolean) => {
