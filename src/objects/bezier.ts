@@ -24,6 +24,7 @@ export type BezierControlPoint =
  */
 export type BezierSubselection = MultiArray<boolean>;
 
+export type BezierNearestSegment = { index: number; t: number };
 export class PathLayer implements CanvasObject {
   constructor(public id: number) {}
 
@@ -120,6 +121,215 @@ export class PathLayer implements CanvasObject {
     return { x: x + this.translation.x, y: y + this.translation.y, width, height };
   }
 
+  closestSegment(point: Point2D, maxDist: number): BezierNearestSegment | undefined {
+    point = { x: point.x - this.translation.x, y: point.y - this.translation.y };
+    let minDist = Infinity;
+    let min: { index: number; t: number } | undefined;
+    for (let i = 0; i < this.controlPoints.length - 1; i++) {
+      const prev = this.controlPoints[i - 1];
+      const cur = this.controlPoints[i];
+      if (cur.type === 'moveTo') {
+        continue;
+      } else if (cur.type === 'lineTo') {
+        // Find the distance from the point to the line segment (prev <-> cur)
+        if (!prev || prev.type === 'closePath') continue;
+        const { x: x1, y: y1 } = prev;
+        const { x: x2, y: y2 } = cur;
+        const { x: px, y: py } = point;
+        // Calculate the distance from point to line segment
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+
+        // Calculate the normalized dot product
+        const t = ((px - x1) * dx + (py - y1) * dy) / (length * length);
+
+        // Find the closest point on the line segment
+        let closestX, closestY;
+        if (t < 0) {
+          closestX = x1;
+          closestY = y1;
+        } else if (t > 1) {
+          closestX = x2;
+          closestY = y2;
+        } else {
+          closestX = x1 + t * dx;
+          closestY = y1 + t * dy;
+        }
+
+        // Calculate the distance to the closest point
+        const distX = px - closestX;
+        const distY = py - closestY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+
+        if (distance <= maxDist && distance < minDist) {
+          minDist = distance;
+          min = { index: i, t: t };
+        }
+      } else if (cur.type === 'quadraticCurveTo') {
+        if (!prev || prev.type === 'closePath') continue;
+        const { x: x1, y: y1 } = prev;
+        const { x: x2, y: y2, controlX, controlY } = cur;
+        const { x: px, y: py } = point;
+
+        const curve = quadraticToCubic(x1, y1, controlX, controlY, x2, y2);
+        const projection = curve.project({ x: px, y: py });
+
+        if (
+          projection &&
+          projection.d !== undefined &&
+          projection.t !== undefined &&
+          projection.d <= maxDist &&
+          projection.d < minDist
+        ) {
+          minDist = projection.d;
+          min = { index: i, t: projection.t };
+        }
+      } else if (cur.type === 'cubicCurveTo') {
+        if (!prev || prev.type === 'closePath') continue;
+        const { x: x1, y: y1 } = prev;
+        const { x: x2, y: y2, controlX1, controlY1, controlX2, controlY2 } = cur;
+        const { x: px, y: py } = point;
+
+        const curve = new Bezier([x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2]);
+        const projection = curve.project({ x: px, y: py });
+
+        if (
+          projection &&
+          projection.d !== undefined &&
+          projection.t !== undefined &&
+          projection.d <= maxDist &&
+          projection.d < minDist
+        ) {
+          minDist = projection.d;
+          min = { index: i, t: projection.t };
+        }
+      }
+    }
+    return min;
+  }
+
+  public pointForNearestSegment(segment: BezierNearestSegment): Point2D {
+    const { index, t } = segment;
+    if (index < 0 || index >= this.controlPoints.length) {
+      throw new Error(`Invalid segment index: ${index}`);
+    }
+    const prev = this.controlPoints[index - 1];
+    const cur = this.controlPoints[index];
+    if (cur.type === 'lineTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const { x: x1, y: y1 } = prev;
+      const { x: x2, y: y2 } = cur;
+      return {
+        x: x1 + t * (x2 - x1),
+        y: y1 + t * (y2 - y1),
+      };
+    } else if (cur.type === 'quadraticCurveTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const { x: x1, y: y1 } = prev;
+      const { x: x2, y: y2, controlX, controlY } = cur;
+      const curve = quadraticToCubic(x1, y1, controlX, controlY, x2, y2);
+      return curve.get(t);
+    } else if (cur.type === 'cubicCurveTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const { x: x1, y: y1 } = prev;
+      const { x: x2, y: y2, controlX1, controlY1, controlX2, controlY2 } = cur;
+      const curve = new Bezier([x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2]);
+      return curve.get(t);
+    }
+    throw new Error('Invalid control points');
+  }
+
+  public addNearestSegment(nearest: BezierNearestSegment): void {
+    // Split the segment into two segments at the nearest point
+    const { index, t } = nearest;
+    if (index < 0 || index >= this.controlPoints.length) {
+      throw new Error(`Invalid segment index: ${index}`);
+    }
+    const prev = this.controlPoints[index - 1];
+    const cur = this.controlPoints[index];
+
+    if (cur.type === 'lineTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const newPoint = this.pointForNearestSegment(nearest);
+      this.controlPoints.splice(index, 0, { type: 'lineTo', ...newPoint });
+    } else if (cur.type === 'quadraticCurveTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const { x: x1, y: y1 } = prev;
+      const { x: x2, y: y2, controlX, controlY } = cur;
+      const curve = quadraticToCubic(x1, y1, controlX, controlY, x2, y2);
+      const split = curve.split(t);
+      const leftCurve = split.left;
+      const rightCurve = split.right;
+      this.controlPoints.splice(
+        index,
+        1,
+        {
+          type: 'cubicCurveTo',
+          x: leftCurve.points[3].x,
+          y: leftCurve.points[3].y,
+          controlX1: leftCurve.points[1].x,
+          controlY1: leftCurve.points[1].y,
+          controlX2: leftCurve.points[2].x,
+          controlY2: leftCurve.points[2].y,
+        },
+        {
+          type: 'cubicCurveTo',
+          x: x2,
+          y: y2,
+          controlX1: rightCurve.points[1].x,
+          controlY1: rightCurve.points[1].y,
+          controlX2: rightCurve.points[2].x,
+          controlY2: rightCurve.points[2].y,
+        }
+      );
+    } else if (cur.type === 'cubicCurveTo') {
+      if (!prev || prev.type === 'closePath') {
+        throw new Error('Invalid control points');
+      }
+      const { x: x1, y: y1 } = prev;
+      const { x: x2, y: y2, controlX1, controlY1, controlX2, controlY2 } = cur;
+      const curve = new Bezier([x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2]);
+      const split = curve.split(t);
+      const leftCurve = split.left;
+      const rightCurve = split.right;
+      this.controlPoints.splice(
+        index,
+        1,
+        {
+          type: 'cubicCurveTo',
+          x: leftCurve.points[3].x,
+          y: leftCurve.points[3].y,
+          controlX1: leftCurve.points[1].x,
+          controlY1: leftCurve.points[1].y,
+          controlX2: leftCurve.points[2].x,
+          controlY2: leftCurve.points[2].y,
+        },
+        {
+          type: 'cubicCurveTo',
+          x: x2,
+          y: y2,
+          controlX1: rightCurve.points[1].x,
+          controlY1: rightCurve.points[1].y,
+          controlX2: rightCurve.points[2].x,
+          controlY2: rightCurve.points[2].y,
+        }
+      );
+    } else {
+      throw new Error('Invalid control point type');
+    }
+  }
+
   public draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.translate(this.translation.x, this.translation.y);
@@ -153,6 +363,21 @@ export class PathLayer implements CanvasObject {
   }
 }
 
+function quadraticToCubic(
+  x1: number,
+  y1: number,
+  cx: number,
+  cy: number,
+  x2: number,
+  y2: number
+): Bezier {
+  const cx1 = x1 + (2 / 3) * (cx - x1);
+  const cy1 = y1 + (2 / 3) * (cy - y1);
+  const cx2 = x2 + (2 / 3) * (cx - x2);
+  const cy2 = y2 + (2 / 3) * (cy - y2);
+  return new Bezier([x1, y1, cx1, cy1, cx2, cy2, x2, y2]);
+}
+
 function calcBoundingBox(controlPoints: BezierControlPoint[]): AABB {
   let minX = Infinity;
   let minY = Infinity;
@@ -180,11 +405,7 @@ function calcBoundingBox(controlPoints: BezierControlPoint[]): AABB {
       if (prevX === undefined || prevY === undefined) {
         throw new Error('Invalid control point');
       }
-      const cx1 = prevX + (2 / 3) * (point.controlX - prevX);
-      const cy1 = prevY + (2 / 3) * (point.controlY - prevY);
-      const cx2 = point.x + (2 / 3) * (point.controlX - point.x);
-      const cy2 = point.y + (2 / 3) * (point.controlY - point.y);
-      const bz = new Bezier([prevX, prevY, cx1, cy1, cx2, cy2, point.x, point.y]);
+      const bz = quadraticToCubic(prevX, prevY, point.controlX, point.controlY, point.x, point.y);
       const bbox = bz.bbox();
       const width = bbox.x.size!;
       const height = bbox.y.size!;

@@ -7,8 +7,8 @@ goals:
 
 todo:
 - [ ] basic bézier curve drawing (via bezier.js)
-  - [ ] correct bounding box
-  - [ ] add point on curve
+  - [x] correct bounding box
+  - [x] add point on curve
   - [ ] pen tool draw out points
   - [x] select & move points
 - [ ] arrow keys for moving points and shapes

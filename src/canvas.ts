@@ -1,6 +1,6 @@
 import { buildDotPatternImage } from './dotGrid';
 import { AABB, intersectAABB, Point2D } from './geom';
-import { PathLayer, BezierSubselection } from './objects/bezier';
+import { PathLayer, BezierSubselection, BezierNearestSegment } from './objects/bezier';
 import { RedCircle } from './objects/redCircle';
 
 import resolveConfig from 'tailwindcss/resolveConfig';
@@ -94,6 +94,7 @@ export class CanvasEditor implements Disposable {
   // Selection should be a single object. We are editing a specific bezier curve.
   private isEditingBezier: boolean = false;
   private bezierSelection: BezierSubselection | null = null;
+  private nearestBezierSegment: BezierNearestSegment | null = null;
   private isDraggingBezierPoints: boolean = false;
 
   /// Scene graph
@@ -244,14 +245,14 @@ export class CanvasEditor implements Disposable {
       const canvasY = localY + this.scrollY;
 
       if (this.isEditingBezier) {
-        const bzo = this.objects.find(o => o.id === this.selection[0]);
-        if (!bzo || !(bzo instanceof PathLayer)) {
+        const path = this.objects.find(o => o.id === this.selection[0]);
+        if (!path || !(path instanceof PathLayer)) {
           throw new Error('Expected selected object to be a Bezier');
         }
         const hit = hitTestBezierControlPoints(
-          bzo,
-          canvasX - bzo.translation.x,
-          canvasY - bzo.translation.y
+          path,
+          canvasX - path.translation.x,
+          canvasY - path.translation.y
         );
         console.log('hitTestBezier', canvasX, canvasY, hit);
 
@@ -276,11 +277,14 @@ export class CanvasEditor implements Disposable {
             // Start dragging the bezier point
           } else {
             // Select just this point
-            const bzs = new MultiArray([bzo.controlPoints.length, 3], false);
+            const bzs = new MultiArray([path.controlPoints.length, 3], false);
             bzs.set(true, i, j);
             this.bezierSelection = bzs;
           }
           this.redraw();
+        } else if (this.nearestBezierSegment) {
+          // Add a new point at the nearest segment
+          path.addNearestSegment(this.nearestBezierSegment);
         } else {
           // Clicked something that is not a control point. Ignore.
         }
@@ -325,6 +329,21 @@ export class CanvasEditor implements Disposable {
           window.removeEventListener('mouseup', onMouseUp);
         });
       }
+    }
+  }
+
+  private onMouseMove(e: MouseEvent): void {
+    if (this.isEditingBezier) {
+      const bzo = this.objects.find(o => o.id === this.selection[0]);
+      if (!bzo || !(bzo instanceof PathLayer)) {
+        throw new Error('Expected selected object to be a Bezier');
+      }
+      const { x: localX, y: localY } = this.outerCoords(e);
+      // Find closest bezier point
+      const segm = bzo.closestSegment({ x: localX, y: localY }, 10);
+      this.nearestBezierSegment = segm ?? null;
+      console.log('closestSegment', segm);
+      this.redraw();
     }
   }
 
@@ -517,6 +536,12 @@ export class CanvasEditor implements Disposable {
       this.canvas.removeEventListener('mousedown', onMouseDown);
     });
 
+    const onMouseMove = this.onMouseMove.bind(this);
+    this.canvas.addEventListener('mousemove', onMouseMove);
+    this.disposers.push(() => {
+      this.canvas.removeEventListener('mousemove', onMouseMove);
+    });
+
     // Listen for device pixel ratio changes
     const onDevicePixelRatioChange = this.onDevicePixelRatioChange.bind(this);
     window.matchMedia('(resolution)').addEventListener('change', onDevicePixelRatioChange);
@@ -650,6 +675,11 @@ export class CanvasEditor implements Disposable {
           }
         }
       }
+      // if we're hovering over a bezier segment, draw a circle at the nearest point
+      if (this.nearestBezierSegment) {
+        const { x, y } = obj.pointForNearestSegment(this.nearestBezierSegment);
+        drawCurvePoint(x, y, false);
+      }
       this.ctx.restore();
     } else {
       // Draw selection around the currently selected objects
@@ -704,7 +734,11 @@ export class CanvasEditor implements Disposable {
         let s = this.bezierSelection?.toString();
         // true -> T, false -> F
         s = s?.replace(/true/g, 'T').replace(/false/g, 'F');
-        this.ctx.fillText(`Bezier editing: (${s})`, 10, 100);
+        const nf = Intl.NumberFormat();
+        const ns = this.nearestBezierSegment
+          ? `(${this.nearestBezierSegment.index}, ${nf.format(this.nearestBezierSegment.t)})`
+          : '';
+        this.ctx.fillText(`Bezier editing: (${s}) n/s ${ns}`, 10, 100);
       }
     }
   }
