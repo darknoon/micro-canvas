@@ -15,7 +15,7 @@ todo:
   - [ ] basic arrow key movement
   - [ ] shift+arrow keys for moving faster
 - [ ] save/load
-  - [ ] save/load to/from file
+  - [ ] save/load localStorage
   - [ ] save/load to/from clipboard
 - [ ] inspector panel?
   - [ ] show selected shape properties

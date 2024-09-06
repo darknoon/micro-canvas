@@ -1,6 +1,11 @@
 import { buildDotPatternImage } from './dotGrid';
 import { AABB, intersectAABB, Point2D } from './geom';
-import { PathLayer, BezierSubselection, BezierNearestSegment } from './objects/bezier';
+import {
+  PathLayer,
+  BezierSubselection,
+  BezierNearestSegment,
+  hitTestBezierControlPoints,
+} from './objects/bezier';
 import { RedCircle } from './objects/redCircle';
 
 import resolveConfig from 'tailwindcss/resolveConfig';
@@ -33,13 +38,19 @@ const designSystem = {
     selectionDragBoxFillOpacity: 0.25,
     selectionBox: tw.theme.colors.blue[500],
 
-    bezierPointFill: tw.theme.colors.gray[500],
+    bezierPointFill: tw.theme.colors.white,
     bezierPointStroke: tw.theme.colors.blue[500],
     bezierPointFillSelected: tw.theme.colors.blue[500],
+    bezierPointStrokeSelected: tw.theme.colors.blue[500],
 
-    bezierControlPointArmStroke: tw.theme.colors.gray[900],
+    bezierControlPointFill: tw.theme.colors.white,
+    bezierControlPointStroke: tw.theme.colors.blue[500],
+    bezierControlPointFillSelected: tw.theme.colors.blue[300],
+    bezierControlPointStrokeSelected: tw.theme.colors.blue[700],
+    bezierControlPointArmStroke: tw.theme.colors.blue[300],
     bezierControlPointArmWidth: 1,
     bezierControlPointWidth: 3,
+    bezierControlPointHitRadius: 5,
 
     debugText: tw.theme.colors.black,
   },
@@ -52,13 +63,19 @@ const designSystem = {
     selectionDragBoxFillOpacity: 0.25,
     selectionBox: tw.theme.colors.blue[400],
 
-    bezierPointFill: tw.theme.colors.gray[400],
+    bezierPointFill: tw.theme.colors.gray[600],
     bezierPointStroke: tw.theme.colors.blue[400],
     bezierPointFillSelected: tw.theme.colors.blue[400],
+    bezierPointStrokeSelected: tw.theme.colors.blue[300],
 
-    bezierControlPointArmStroke: tw.theme.colors.gray[400],
+    bezierControlPointFill: tw.theme.colors.gray[600],
+    bezierControlPointStroke: tw.theme.colors.blue[400],
+    bezierControlPointFillSelected: tw.theme.colors.blue[500],
+    bezierControlPointStrokeSelected: tw.theme.colors.blue[300],
+    bezierControlPointArmStroke: tw.theme.colors.blue[500],
     bezierControlPointArmWidth: 1,
     bezierControlPointWidth: 3,
+    bezierControlPointHitRadius: 5,
 
     debugText: tw.theme.colors.white,
   },
@@ -73,8 +90,10 @@ export class CanvasEditor implements Disposable {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private container: HTMLElement;
-  private pattern: CanvasPattern;
+  // Cached pattern for the background, invalidated on devicePixelRatio change or color scheme change
+  private _pattern: CanvasPattern | undefined;
   private devicePixelRatio: number;
+  private isDarkMode: boolean = false;
 
   // Scroll position in canvas coordinates
   private scrollX = 0;
@@ -123,17 +142,6 @@ export class CanvasEditor implements Disposable {
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
-
-    // resolve query to check if light or dark mode
-    const dmq = window.matchMedia('(prefers-color-scheme: dark)');
-    const DS = dmq.matches ? designSystem.dark : designSystem.light;
-
-    // Create a pattern for the background
-    const patternCanvas = buildDotPatternImage(dpr, DS.canvasBackgroundDot);
-    // Set the background pattern
-    const pattern = this.ctx.createPattern(patternCanvas, 'repeat');
-    if (!pattern) throw new Error('Failed to create canvas background');
-    this.pattern = pattern;
 
     this.factories = {
       circle: () => new RedCircle(this.nextId++),
@@ -196,6 +204,38 @@ export class CanvasEditor implements Disposable {
     };
   }
 
+  private canvasCoords(e: MouseEvent): Point2D {
+    const { x: localX, y: localY } = this.outerCoords(e);
+    return {
+      x: localX + this.scrollX,
+      y: localY + this.scrollY,
+    };
+  }
+
+  onColorSchemeChange(e: MediaQueryListEvent) {
+    this.isDarkMode = e.matches;
+    this._pattern = undefined;
+    this.redraw();
+  }
+
+  private get DS() {
+    return this.isDarkMode ? designSystem.dark : designSystem.light;
+  }
+
+  private get pattern() {
+    if (!this._pattern) {
+      const dpr = this.devicePixelRatio;
+      const DS = this.DS;
+      // Create a pattern for the background
+      const patternCanvas = buildDotPatternImage(dpr, DS.canvasBackgroundDot);
+      // Set the background pattern
+      const pattern = this.ctx.createPattern(patternCanvas, 'repeat');
+      if (!pattern) throw new Error('Failed to create canvas background');
+      this._pattern = pattern;
+    }
+    return this._pattern;
+  }
+
   private beginEvent() {
     // Run any cleanup functions from previous events
     if (this.eventCleanups.length > 0) {
@@ -214,10 +254,12 @@ export class CanvasEditor implements Disposable {
     if (e.key === 'Escape') {
       if (this.isEditingBezier) {
         this.isEditingBezier = false;
+        this.updateCursor();
         this.redraw();
         e.preventDefault();
       } else {
         this.selection = [];
+        this.updateCursor();
         this.redraw();
         e.preventDefault();
       }
@@ -229,6 +271,7 @@ export class CanvasEditor implements Disposable {
           if (this.isEditingBezier) {
             this.bezierSelection = new MultiArray([object.controlPoints.length, 3], false);
           }
+          this.updateCursor();
           this.redraw();
           e.preventDefault();
         }
@@ -238,6 +281,7 @@ export class CanvasEditor implements Disposable {
 
   private onMouseDown(e: MouseEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e);
+    const DS = this.DS;
     if (e.button === 1) {
       // Middle mouse button
 
@@ -265,16 +309,18 @@ export class CanvasEditor implements Disposable {
         if (!path || !(path instanceof PathLayer)) {
           throw new Error('Expected selected object to be a Bezier');
         }
+        if (!this.bezierSelection) throw new Error('Expected bezier selection to be set');
         const hit = hitTestBezierControlPoints(
           path,
+          this.bezierSelection,
           canvasX - path.translation.x,
-          canvasY - path.translation.y
+          canvasY - path.translation.y,
+          DS.bezierControlPointHitRadius
         );
         console.log('hitTestBezier', canvasX, canvasY, hit);
 
         if (hit) {
           const [i, j] = hit;
-          if (!this.bezierSelection) throw new Error('Expected bezier selection to be set');
           const wasSelected = this.bezierSelection.get(i, j);
           // copy
           this.isDraggingBezierPoints = true;
@@ -300,7 +346,11 @@ export class CanvasEditor implements Disposable {
           this.redraw();
         } else if (this.nearestBezierSegment) {
           // Add a new point at the nearest segment
+          const newSelectionIndex = this.nearestBezierSegment.index;
           path.addNearestSegment(this.nearestBezierSegment);
+          const s = new MultiArray([path.controlPoints.length, 3], false);
+          s.set(true, newSelectionIndex, 0);
+          this.bezierSelection = s;
         } else {
           // Clicked something that is not a control point. Ignore.
         }
@@ -348,22 +398,53 @@ export class CanvasEditor implements Disposable {
     }
   }
 
+  private get bezierEditingObject(): PathLayer | undefined {
+    if (this.selection.length !== 1) return undefined;
+    const obj = this.objects.find(o => o.id === this.selection[0]);
+    if (obj instanceof PathLayer) {
+      return obj;
+    }
+    return undefined;
+  }
+
   private onMouseMove(e: MouseEvent): void {
-    if (this.isEditingBezier) {
-      const bzo = this.objects.find(o => o.id === this.selection[0]);
-      if (!bzo || !(bzo instanceof PathLayer)) {
-        throw new Error('Expected selected object to be a Bezier');
+    if (this.isEditingBezier && this._activeToolId === Tool.PEN) {
+      const bzo = this.bezierEditingObject;
+      if (!bzo) return;
+      const { x: localX, y: localY } = this.canvasCoords(e);
+      // Are we closest to a current control point?
+      if (!this.bezierSelection) throw new Error('Expected bezier selection to be set');
+      const hit = hitTestBezierControlPoints(
+        bzo,
+        this.bezierSelection,
+        localX,
+        localY,
+        this.DS.bezierControlPointHitRadius
+      );
+      if (hit) {
+        this.nearestBezierSegment = null;
+        this.redraw();
+      } else {
+        // Find closest bezier point
+        const segm = bzo.closestSegment({ x: localX, y: localY });
+        this.nearestBezierSegment = segm ?? null;
+        console.log('closestSegment', segm);
+        this.redraw();
       }
-      const { x: localX, y: localY } = this.outerCoords(e);
-      // Find closest bezier point
-      const segm = bzo.closestSegment({ x: localX, y: localY }, 10);
-      this.nearestBezierSegment = segm ?? null;
-      console.log('closestSegment', segm);
-      this.redraw();
+    }
+    this.updateCursor();
+  }
+
+  updateCursor(): void {
+    // Set cursor to '+' if we have a nearest bezier segment
+    if (this.nearestBezierSegment && this._activeToolId === Tool.PEN) {
+      this.canvas.style.cursor = 'crosshair';
+    } else {
+      this.canvas.style.cursor = 'default';
     }
   }
 
-  /** selection bounding box, in internal canvas coordinates */
+  /** selection dragging box, in internal canvas coordinates */
   private get selectionBoundingBox(): AABB {
     const origin = this.selectionDraggingOrigin;
     if (!origin) throw new Error('Selection dragging origin is null');
@@ -434,6 +515,7 @@ export class CanvasEditor implements Disposable {
   public set activeToolId(value: Tool) {
     this._activeToolId = value;
     this.redraw();
+    this.updateCursor();
   }
 
   private onSelectionDragUp(): void {
@@ -450,11 +532,6 @@ export class CanvasEditor implements Disposable {
     const deltaX = localX - this.lastDragX!;
     const deltaY = localY - this.lastDragY!;
 
-    const bzo = this.objects.find(o => o.id === this.selection[0]);
-    if (!bzo || !(bzo instanceof PathLayer)) {
-      throw new Error('Expected selected object to be a Bezier');
-    }
-
     this.moveSelectedBezierPoints(deltaX, deltaY);
 
     this.lastDragX = localX;
@@ -463,18 +540,15 @@ export class CanvasEditor implements Disposable {
   }
 
   private moveSelectedBezierPoints(deltaX: number, deltaY: number): void {
-    const bzo = this.objects.find(o => o.id === this.selection[0]);
-    if (!bzo || !(bzo instanceof PathLayer)) {
-      throw new Error('Expected selected object to be a Bezier');
-    }
-    if (!this.bezierSelection) {
-      throw new Error('Expected bezier selection to be set');
-    }
+    const bzo = this.bezierEditingObject;
+    if (!bzo) throw new Error('Expected selected object to be a Bezier');
+    if (!this.bezierSelection) throw new Error('Expected bezier selection to be set');
+
     const s = this.bezierSelection;
 
-    const newControlPoints = bzo.controlPoints.map((_point, i) => {
+    const newControlPoints = bzo.controlPoints.map((p, i) => {
       // copy point
-      const point = { ..._point };
+      const point = { ...p };
       const { type } = point;
       const s0 = s.get(i, 0);
       const p0 = i > 0 ? s.get(i - 1, 0) : false;
@@ -498,7 +572,6 @@ export class CanvasEditor implements Disposable {
       return point;
     });
 
-    // Use setter method instead of direct assignment
     bzo.controlPoints = newControlPoints;
     this.redraw();
   }
@@ -564,21 +637,24 @@ export class CanvasEditor implements Disposable {
     this.disposers.push(() =>
       window.matchMedia('(resolution)').removeEventListener('change', onDevicePixelRatioChange)
     );
+    // Listen for color scheme changes
+    const dmq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onColorSchemeChange = this.onColorSchemeChange.bind(this);
+    dmq.addEventListener('change', onColorSchemeChange);
+    this.disposers.push(() => dmq.removeEventListener('change', onColorSchemeChange));
+    this.isDarkMode = dmq.matches;
   }
 
   private onDevicePixelRatioChange(): void {
     const newDPR = window.devicePixelRatio || 1;
     if (newDPR !== this.devicePixelRatio) {
+      this._pattern = undefined;
       this.devicePixelRatio = newDPR;
       this.resize(
         this.canvas.width / this.devicePixelRatio,
         this.canvas.height / this.devicePixelRatio
       );
     }
-  }
-
-  private get isDarkMode(): boolean {
-    return true;
   }
 
   private redraw(): void {
@@ -627,15 +703,21 @@ export class CanvasEditor implements Disposable {
         this.ctx.arc(x, y, 3, 0, 2 * Math.PI);
         this.ctx.fillStyle = selected ? DS.bezierPointFillSelected : DS.bezierPointFill;
         this.ctx.fill();
-        this.ctx.strokeStyle = DS.bezierPointStroke;
+        this.ctx.strokeStyle = selected ? DS.bezierPointStrokeSelected : DS.bezierPointStroke;
         this.ctx.stroke();
       };
 
       const drawControlPoint = (x: number, y: number, selected: boolean) => {
         this.ctx.beginPath();
-        this.ctx.fillStyle = selected ? DS.bezierPointFillSelected : DS.bezierPointFill;
+        this.ctx.fillStyle = selected
+          ? DS.bezierControlPointFill
+          : DS.bezierControlPointFillSelected;
+        this.ctx.strokeStyle = selected
+          ? DS.bezierControlPointStroke
+          : DS.bezierControlPointStrokeSelected;
         const r = DS.bezierControlPointWidth;
         this.ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+        this.ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
       };
 
       const drawControlArm = (x0: number, y0: number, x1: number, y1: number) => {
@@ -667,8 +749,8 @@ export class CanvasEditor implements Disposable {
           drawCurvePoint(point.x, point.y, s0);
           // If this quad curve is selected, draw the control point
           if (s0 || s1 || n0) {
-            drawControlPoint(point.controlX, point.controlY, s1);
             drawControlArm(point.x, point.y, point.controlX, point.controlY);
+            drawControlPoint(point.controlX, point.controlY, s1);
           }
         } else if (point.type === 'cubicCurveTo') {
           const s0 = this.bezierSelection.get(i, 0);
@@ -692,7 +774,11 @@ export class CanvasEditor implements Disposable {
         }
       }
       // if we're hovering over a bezier segment, draw a circle at the nearest point
-      if (this.nearestBezierSegment) {
+      if (
+        this.nearestBezierSegment &&
+        this.activeToolId === Tool.PEN &&
+        !this.isDraggingBezierPoints
+      ) {
         const { x, y } = obj.pointForNearestSegment(this.nearestBezierSegment);
         drawCurvePoint(x, y, false);
       }
@@ -760,54 +846,14 @@ export class CanvasEditor implements Disposable {
   }
 
   public resize(width: number, height: number): void {
+    //oeu
     this.canvas.width = width * this.devicePixelRatio;
     this.canvas.height = height * this.devicePixelRatio;
     this.redraw();
   }
 
   public dispose(): void {
+    console.log('Disposing CanvasEditor');
     this.disposers.forEach(d => d());
   }
-}
-
-function hitTestBezierControlPoints(
-  bezier: PathLayer,
-  x: number,
-  y: number,
-  distance: number = 10
-): [number, number] | undefined {
-  const pointClose = (px: number, py: number) => {
-    return Math.sqrt((px - x) ** 2 + (py - y) ** 2) < distance;
-  };
-
-  for (let i = 0; i < bezier.controlPoints.length; i++) {
-    const point = bezier.controlPoints[i];
-    if (point.type === 'moveTo') {
-      if (pointClose(point.x, point.y)) {
-        return [i, 0];
-      }
-    } else if (point.type === 'lineTo') {
-      if (pointClose(point.x, point.y)) {
-        return [i, 0];
-      }
-    } else if (point.type === 'quadraticCurveTo') {
-      if (pointClose(point.x, point.y)) {
-        return [i, 0];
-      }
-      if (pointClose(point.controlX, point.controlY)) {
-        return [i, 1];
-      }
-    } else if (point.type === 'cubicCurveTo') {
-      if (pointClose(point.x, point.y)) {
-        return [i, 0];
-      }
-      if (pointClose(point.controlX1, point.controlY1)) {
-        return [i, 1];
-      }
-      if (pointClose(point.controlX2, point.controlY2)) {
-        return [i, 2];
-      }
-    }
-  }
-  return undefined;
 }

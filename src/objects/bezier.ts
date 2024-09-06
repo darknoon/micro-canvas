@@ -25,6 +25,7 @@ export type BezierControlPoint =
 export type BezierSubselection = MultiArray<boolean>;
 
 export type BezierNearestSegment = { index: number; t: number };
+
 export class PathLayer implements CanvasObject {
   constructor(public id: number) {}
 
@@ -121,21 +122,25 @@ export class PathLayer implements CanvasObject {
     return { x: x + this.translation.x, y: y + this.translation.y, width, height };
   }
 
-  closestSegment(point: Point2D, maxDist: number): BezierNearestSegment | undefined {
-    point = { x: point.x - this.translation.x, y: point.y - this.translation.y };
+  public closestSegment(point: Point2D, threshold: number = 10): BezierNearestSegment | undefined {
+    const px = point.x - this.translation.x;
+    const py = point.y - this.translation.y;
     let minDist = Infinity;
     let min: { index: number; t: number } | undefined;
-    for (let i = 0; i < this.controlPoints.length - 1; i++) {
-      const prev = this.controlPoints[i - 1];
-      const cur = this.controlPoints[i];
-      if (cur.type === 'moveTo') {
+
+    for (const { prev, current, index } of this.segments()) {
+      if (current.type === 'moveTo' || current.type === 'closePath') {
         continue;
-      } else if (cur.type === 'lineTo') {
-        // Find the distance from the point to the line segment (prev <-> cur)
-        if (!prev || prev.type === 'closePath') continue;
+      }
+
+      if (!prev || prev.type === 'closePath') {
+        continue;
+      }
+
+      if (current.type === 'lineTo') {
         const { x: x1, y: y1 } = prev;
-        const { x: x2, y: y2 } = cur;
-        const { x: px, y: py } = point;
+        const { x: x2, y: y2 } = current;
+
         // Calculate the distance from point to line segment
         const dx = x2 - x1;
         const dy = y2 - y1;
@@ -162,15 +167,13 @@ export class PathLayer implements CanvasObject {
         const distY = py - closestY;
         const distance = Math.sqrt(distX * distX + distY * distY);
 
-        if (distance <= maxDist && distance < minDist) {
+        if (distance <= threshold && distance < minDist) {
           minDist = distance;
-          min = { index: i, t: t };
+          min = { index, t };
         }
-      } else if (cur.type === 'quadraticCurveTo') {
-        if (!prev || prev.type === 'closePath') continue;
+      } else if (current.type === 'quadraticCurveTo') {
         const { x: x1, y: y1 } = prev;
-        const { x: x2, y: y2, controlX, controlY } = cur;
-        const { x: px, y: py } = point;
+        const { x: x2, y: y2, controlX, controlY } = current;
 
         const curve = quadraticToCubic(x1, y1, controlX, controlY, x2, y2);
         const projection = curve.project({ x: px, y: py });
@@ -179,17 +182,15 @@ export class PathLayer implements CanvasObject {
           projection &&
           projection.d !== undefined &&
           projection.t !== undefined &&
-          projection.d <= maxDist &&
+          projection.d <= threshold &&
           projection.d < minDist
         ) {
           minDist = projection.d;
-          min = { index: i, t: projection.t };
+          min = { index, t: projection.t };
         }
-      } else if (cur.type === 'cubicCurveTo') {
-        if (!prev || prev.type === 'closePath') continue;
+      } else if (current.type === 'cubicCurveTo') {
         const { x: x1, y: y1 } = prev;
-        const { x: x2, y: y2, controlX1, controlY1, controlX2, controlY2 } = cur;
-        const { x: px, y: py } = point;
+        const { x: x2, y: y2, controlX1, controlY1, controlX2, controlY2 } = current;
 
         const curve = new Bezier([x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2]);
         const projection = curve.project({ x: px, y: py });
@@ -198,15 +199,28 @@ export class PathLayer implements CanvasObject {
           projection &&
           projection.d !== undefined &&
           projection.t !== undefined &&
-          projection.d <= maxDist &&
+          projection.d <= threshold &&
           projection.d < minDist
         ) {
           minDist = projection.d;
-          min = { index: i, t: projection.t };
+          min = { index, t: projection.t };
         }
       }
     }
     return min;
+  }
+
+  *segments(): IterableIterator<{
+    prev: BezierControlPoint | null;
+    current: BezierControlPoint;
+    index: number;
+  }> {
+    let prev: BezierControlPoint | null = null;
+    for (let i = 0; i < this.controlPoints.length; i++) {
+      const current = this.controlPoints[i];
+      yield { prev, current, index: i };
+      prev = current;
+    }
   }
 
   public pointForNearestSegment(segment: BezierNearestSegment): Point2D {
@@ -433,4 +447,45 @@ function calcBoundingBox(controlPoints: BezierControlPoint[]): AABB {
     }
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+export function hitTestBezierControlPoints(
+  bezier: PathLayer,
+  selection: BezierSubselection,
+  x: number,
+  y: number,
+  distance: number = 10
+): [number, number] | undefined {
+  const pointClose = (px: number, py: number) => {
+    return Math.sqrt((px - x) ** 2 + (py - y) ** 2) < distance;
+  };
+
+  for (const { index, prev, current } of bezier.segments()) {
+    const prevSelected = prev ? selection.get(index - 1, 0) : false;
+    const currentSelected = selection.get(index, 0);
+    const selected = prevSelected || currentSelected;
+    if (current.type === 'moveTo' || current.type === 'lineTo') {
+      if (pointClose(current.x, current.y)) {
+        return [index, 0];
+      }
+    } else if (current.type === 'quadraticCurveTo') {
+      if (pointClose(current.x, current.y)) {
+        return [index, 0];
+      }
+      if (selected && pointClose(current.controlX, current.controlY)) {
+        return [index, 1];
+      }
+    } else if (current.type === 'cubicCurveTo') {
+      if (pointClose(current.x, current.y)) {
+        return [index, 0];
+      }
+      if (selected && pointClose(current.controlX1, current.controlY1)) {
+        return [index, 1];
+      }
+      if (selected && pointClose(current.controlX2, current.controlY2)) {
+        return [index, 2];
+      }
+    }
+  }
+  return undefined;
 }
