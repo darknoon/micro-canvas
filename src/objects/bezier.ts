@@ -451,7 +451,7 @@ function calcBoundingBox(controlPoints: BezierControlPoint[]): AABB {
 
 export function hitTestBezierControlPoints(
   bezier: PathLayer,
-  selection: BezierSubselection,
+  s: BezierSubselection,
   x: number,
   y: number,
   distance: number = 10
@@ -460,36 +460,32 @@ export function hitTestBezierControlPoints(
     return Math.sqrt((px - x) ** 2 + (py - y) ** 2) < distance;
   };
 
-  for (const { index, prev, current } of bezier.segments()) {
+  for (const { index: i, prev, current } of bezier.segments()) {
     // ~if MultiArray had a slice API: prev ? selection[index - 1].any() : false
-    const prevSelected = prev
-      ? selection.get(index - 1, 0) || selection.get(index - 1, 1) || selection.get(index - 1, 2)
-      : false;
-
-    const currentSelected =
-      selection.get(index, 0) || selection.get(index, 1) || selection.get(index, 2);
+    const prevSelected = prev ? s.get(i - 1, 0) || s.get(i - 1, 1) || s.get(i - 1, 2) : false;
+    const currentSelected = s.get(i, 0) || s.get(i, 1) || s.get(i, 2);
     // Are the control points visible for the current segment?
     const showControl = prevSelected || currentSelected;
     if (current.type === 'moveTo' || current.type === 'lineTo') {
       if (pointClose(current.x, current.y)) {
-        return [index, 0];
+        return [i, 0];
       }
     } else if (current.type === 'quadraticCurveTo') {
       if (pointClose(current.x, current.y)) {
-        return [index, 0];
+        return [i, 0];
       }
       if (showControl && pointClose(current.controlX, current.controlY)) {
-        return [index, 1];
+        return [i, 1];
       }
     } else if (current.type === 'cubicCurveTo') {
       if (pointClose(current.x, current.y)) {
-        return [index, 0];
+        return [i, 0];
       }
       if (showControl && pointClose(current.controlX1, current.controlY1)) {
-        return [index, 1];
+        return [i, 1];
       }
       if (showControl && pointClose(current.controlX2, current.controlY2)) {
-        return [index, 2];
+        return [i, 2];
       }
     }
   }
