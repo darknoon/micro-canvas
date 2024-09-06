@@ -29,8 +29,20 @@ const toolbarElem = parent.querySelector<HTMLDivElement>('#toolbar')!;
 // topBar not really doing anything yet
 // const topBar = new TopBar(topBarElem);
 const tools = new ToolShelf(toolbarElem);
-const editor = new CanvasEditor(canvasContainerElem);
+let editor = new CanvasEditor(canvasContainerElem);
 
 tools.addEventListener('toolSelected', () => {
   editor.activeToolId = tools.activeToolId;
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept('./canvas', m => {
+    console.log('canvas module updated, disposing old editor and creating new one, copying state…');
+    editor.dispose();
+    if (m?.CanvasEditor) {
+      const e = new m.CanvasEditor(canvasContainerElem);
+      e.copyFrom(editor);
+      editor = e;
+    }
+  });
+}

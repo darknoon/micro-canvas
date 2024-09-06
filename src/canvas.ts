@@ -143,8 +143,24 @@ export class CanvasEditor implements Disposable {
     this.objects = [this.factories.circle(), this.factories.bezier()];
 
     this.container.appendChild(this.canvas);
+    this.disposers.push(() => this.container.removeChild(this.canvas));
 
     this.setupEventListeners();
+    this.redraw();
+  }
+
+  /** This is used when hot reloading to ensure that our state is preserved */
+  public copyFrom(other: CanvasEditor) {
+    // TODO: can we deep copy the objects?
+    this.objects = other.objects;
+    this.scrollX = other.scrollX;
+    //oeu
+    this.scrollY = other.scrollY;
+    this.selection = other.selection;
+    this.isEditingBezier = other.isEditingBezier;
+    this.bezierSelection = other.bezierSelection;
+    this.nearestBezierSegment = other.nearestBezierSegment;
+    this.isDraggingBezierPoints = other.isDraggingBezierPoints;
     this.redraw();
   }
 
