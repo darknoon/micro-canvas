@@ -64,16 +64,16 @@ const designSystem = {
     selectionDragBoxFillOpacity: 0.25,
     selectionBox: tw.theme.colors.blue[400],
 
-    bezierPointFill: tw.theme.colors.gray[600],
+    bezierPointFill: tw.theme.colors.gray[900],
     bezierPointStroke: tw.theme.colors.blue[400],
     bezierPointFillSelected: tw.theme.colors.blue[400],
-    bezierPointStrokeSelected: tw.theme.colors.blue[300],
+    bezierPointStrokeSelected: tw.theme.colors.gray[900],
 
-    bezierControlPointFill: tw.theme.colors.gray[600],
+    bezierControlPointFill: tw.theme.colors.gray[900],
     bezierControlPointStroke: tw.theme.colors.blue[400],
-    bezierControlPointFillSelected: tw.theme.colors.blue[500],
-    bezierControlPointStrokeSelected: tw.theme.colors.blue[300],
-    bezierControlPointArmStroke: tw.theme.colors.blue[500],
+    bezierControlPointFillSelected: tw.theme.colors.blue[400],
+    bezierControlPointStrokeSelected: tw.theme.colors.gray[900],
+    bezierControlPointArmStroke: tw.theme.colors.blue[400],
     bezierControlPointArmWidth: 1,
     bezierControlPointWidth: 3,
     bezierControlPointHitRadius: 5,
@@ -643,7 +643,7 @@ export class CanvasEditor implements Disposable {
     const onColorSchemeChange = this.onColorSchemeChange.bind(this);
     dmq.addEventListener('change', onColorSchemeChange);
     this.disposers.push(() => dmq.removeEventListener('change', onColorSchemeChange));
-    this.isDarkMode = dmq.matches;
+    this.isDarkMode = dmq.matches || document.documentElement.classList.contains('dark');
   }
 
   private onDevicePixelRatioChange(): void {

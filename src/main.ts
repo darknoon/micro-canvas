@@ -4,12 +4,7 @@ import { TopBar } from './topBar';
 import { ToolShelf } from './toolShelf';
 
 // style html elem
-document.documentElement.classList.add(
-  'bg-white',
-  'dark:bg-black',
-  'text-black',
-  'dark:text-white'
-);
+document.body.classList.add('bg-white', 'dark:bg-black', 'text-black', 'dark:text-white');
 
 const parent = document.querySelector<HTMLDivElement>('#app')!;
 parent.innerHTML = `
