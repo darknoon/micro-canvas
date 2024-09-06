@@ -24,4 +24,16 @@ export class RedCircle implements CanvasObject {
     ctx.fill();
     ctx.closePath();
   }
+
+  public toSVG(): SVGCircleElement {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', (this.translation.x + this.size.width / 2).toString());
+    circle.setAttribute('cy', (this.translation.y + this.size.height / 2).toString());
+    circle.setAttribute('r', (this.size.width / 2).toString());
+    circle.setAttribute('fill', 'red');
+    circle.setAttribute('stroke', 'none');
+    circle.setAttribute('stroke-width', '1');
+    return circle;
+  }
 }

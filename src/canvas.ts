@@ -26,6 +26,7 @@ export interface CanvasObject {
   readonly boundingBox: AABB;
   translation: Point2D;
   draw(ctx: CanvasRenderingContext2D): void;
+  toSVG(): SVGElement;
 }
 
 const designSystem = {
@@ -856,32 +857,42 @@ export class CanvasEditor implements Disposable {
     svg.setAttribute('height', this.canvas.height.toString());
 
     for (const object of this.objects) {
-      if (object instanceof PathLayer) {
-        const path = document.createElementNS(svgNS, 'path');
-        const svgPath = object.toSVGPath();
-        path.setAttribute('d', svgPath);
-        path.setAttribute('fill', object.fill || 'none');
-        path.setAttribute('stroke', object.stroke || 'none');
-        path.setAttribute('stroke-width', object.strokeWidth?.toString() || '1');
-        path.setAttribute(
-          'transform',
-          `translate(${object.translation.x},${object.translation.y})`
-        );
+      if ('toSVG' in object) {
+        const path = object.toSVG();
         svg.appendChild(path);
-      } else if (object instanceof RedCircle) {
-        const circle = document.createElementNS(svgNS, 'circle');
-        circle.setAttribute('cx', (object.translation.x + object.size.width / 2).toString());
-        circle.setAttribute('cy', (object.translation.y + object.size.height / 2).toString());
-        circle.setAttribute('r', (object.size.width / 2).toString());
-        circle.setAttribute('fill', 'red');
-        circle.setAttribute('stroke', 'none');
-        circle.setAttribute('stroke-width', '1');
-        svg.appendChild(circle);
+      } else {
+        console.warn('Object does not implement toSVG:', object);
       }
     }
 
     const serializer = new XMLSerializer();
     return serializer.serializeToString(svg);
+  }
+
+  public importSVG(svg: string): void {
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+    const svgElement = svgDoc.documentElement;
+
+    if (svgElement.tagName !== 'svg') {
+      throw new Error('Invalid SVG: Root element is not <svg>');
+    }
+
+    // Clear existing objects
+    this.objects = [];
+
+    // Process path elements and groups
+    const processElement = (element: Element) => {
+      if (element.tagName === 'path') {
+        const pathLayer = PathLayer.fromSVGPath(element as SVGPathElement, this.objects.length);
+        this.objects.push(pathLayer);
+      } else if (element.tagName === 'g') {
+        Array.from(element.children).forEach(processElement);
+      }
+    };
+
+    Array.from(svgElement.children).forEach(processElement);
+    this.redraw();
   }
 
   public dispose(): void {

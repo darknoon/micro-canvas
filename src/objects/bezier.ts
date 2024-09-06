@@ -402,6 +402,41 @@ export class PathLayer implements CanvasObject {
     }
     return path.trim();
   }
+  public toSVG(): SVGPathElement {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const svgPath = this.toSVGPath();
+    path.setAttribute('d', svgPath);
+    path.setAttribute('fill', this.fill || 'none');
+    path.setAttribute('stroke', this.stroke || 'none');
+    path.setAttribute('stroke-width', this.strokeWidth?.toString() || '1');
+    path.setAttribute('transform', `translate(${this.translation.x},${this.translation.y})`);
+    return path;
+  }
+
+  static fromSVGPath(path: SVGPathElement, id: number): PathLayer {
+    const pathLayer = new PathLayer(id);
+    const d = path.getAttribute('d');
+    if (!d) {
+      throw new Error('SVG path element does not have a "d" attribute');
+    }
+
+    pathLayer.controlPoints = parseCommands(d);
+    pathLayer.fill = path.getAttribute('fill') || null;
+    pathLayer.stroke = path.getAttribute('stroke') || null;
+    pathLayer.strokeWidth = path.getAttribute('stroke-width')
+      ? parseFloat(path.getAttribute('stroke-width')!)
+      : null;
+
+    const transform = path.getAttribute('transform');
+    if (transform) {
+      const match = transform.match(/translate\((-?\d+\.?\d*),(-?\d+\.?\d*)\)/);
+      if (match) {
+        pathLayer.translation = { x: parseFloat(match[1]), y: parseFloat(match[2]) };
+      }
+    }
+
+    return pathLayer;
+  }
 }
 
 function quadraticToCubic(
@@ -517,4 +552,114 @@ export function hitTestBezierControlPoints(
     }
   }
   return undefined;
+}
+
+export function parseCommands(d: string): BezierControlPoint[] {
+  let currentX = 0;
+  let currentY = 0;
+
+  const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
+  if (!commands) {
+    throw new Error('Invalid SVG path data');
+  }
+
+  const controlPoints: BezierControlPoint[] = [];
+  for (const command of commands) {
+    const type = command[0];
+    const args = command
+      .slice(1)
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+
+    const isRelative = type === type.toLowerCase();
+
+    switch (type.toUpperCase()) {
+      case 'M':
+        currentX = isRelative ? currentX + args[0] : args[0];
+        currentY = isRelative ? currentY + args[1] : args[1];
+        controlPoints.push({ type: 'moveTo', x: currentX, y: currentY });
+        break;
+      case 'L':
+        currentX = isRelative ? currentX + args[0] : args[0];
+        currentY = isRelative ? currentY + args[1] : args[1];
+        controlPoints.push({ type: 'lineTo', x: currentX, y: currentY });
+        break;
+      case 'C':
+        controlPoints.push({
+          type: 'cubicCurveTo',
+          controlX1: isRelative ? currentX + args[0] : args[0],
+          controlY1: isRelative ? currentY + args[1] : args[1],
+          controlX2: isRelative ? currentX + args[2] : args[2],
+          controlY2: isRelative ? currentY + args[3] : args[3],
+          x: isRelative ? currentX + args[4] : args[4],
+          y: isRelative ? currentY + args[5] : args[5],
+        });
+        currentX = isRelative ? currentX + args[4] : args[4];
+        currentY = isRelative ? currentY + args[5] : args[5];
+        break;
+      case 'Q':
+        controlPoints.push({
+          type: 'quadraticCurveTo',
+          controlX: isRelative ? currentX + args[0] : args[0],
+          controlY: isRelative ? currentY + args[1] : args[1],
+          x: isRelative ? currentX + args[2] : args[2],
+          y: isRelative ? currentY + args[3] : args[3],
+        });
+        currentX = isRelative ? currentX + args[2] : args[2];
+        currentY = isRelative ? currentY + args[3] : args[3];
+        break;
+      case 'Z':
+        controlPoints.push({ type: 'closePath' });
+        break;
+      case 'H':
+        currentX = isRelative ? currentX + args[0] : args[0];
+        controlPoints.push({ type: 'lineTo', x: currentX, y: currentY });
+        break;
+      case 'V':
+        currentY = isRelative ? currentY + args[0] : args[0];
+        controlPoints.push({ type: 'lineTo', x: currentX, y: currentY });
+        break;
+      case 'S':
+        const reflectedX =
+          2 * currentX - (controlPoints[controlPoints.length - 1] as any).controlX2;
+        const reflectedY =
+          2 * currentY - (controlPoints[controlPoints.length - 1] as any).controlY2;
+        controlPoints.push({
+          type: 'cubicCurveTo',
+          controlX1: reflectedX,
+          controlY1: reflectedY,
+          controlX2: isRelative ? currentX + args[0] : args[0],
+          controlY2: isRelative ? currentY + args[1] : args[1],
+          x: isRelative ? currentX + args[2] : args[2],
+          y: isRelative ? currentY + args[3] : args[3],
+        });
+        currentX = isRelative ? currentX + args[2] : args[2];
+        currentY = isRelative ? currentY + args[3] : args[3];
+        break;
+      case 'T':
+        const lastQuadratic = controlPoints[controlPoints.length - 1] as any;
+        const reflectedQuadX = 2 * currentX - (lastQuadratic.controlX || currentX);
+        const reflectedQuadY = 2 * currentY - (lastQuadratic.controlY || currentY);
+        controlPoints.push({
+          type: 'quadraticCurveTo',
+          controlX: reflectedQuadX,
+          controlY: reflectedQuadY,
+          x: isRelative ? currentX + args[0] : args[0],
+          y: isRelative ? currentY + args[1] : args[1],
+        });
+        currentX = isRelative ? currentX + args[0] : args[0];
+        currentY = isRelative ? currentY + args[1] : args[1];
+        break;
+      case 'A':
+        // Arc command is complex and requires additional processing
+        // For simplicity, we'll approximate it with a line for now
+        currentX = isRelative ? currentX + args[5] : args[5];
+        currentY = isRelative ? currentY + args[6] : args[6];
+        controlPoints.push({ type: 'lineTo', x: currentX, y: currentY });
+        console.warn('Approximating arc command with lineTo');
+        break;
+    }
+  }
+  return controlPoints;
 }
