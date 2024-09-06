@@ -461,9 +461,15 @@ export function hitTestBezierControlPoints(
   };
 
   for (const { index, prev, current } of bezier.segments()) {
-    const prevSelected = prev ? selection.get(index - 1, 0) : false;
-    const currentSelected = selection.get(index, 0);
-    const selected = prevSelected || currentSelected;
+    // ~if MultiArray had a slice API: prev ? selection[index - 1].any() : false
+    const prevSelected = prev
+      ? selection.get(index - 1, 0) || selection.get(index - 1, 1) || selection.get(index - 1, 2)
+      : false;
+
+    const currentSelected =
+      selection.get(index, 0) || selection.get(index, 1) || selection.get(index, 2);
+    // Are the control points visible for the current segment?
+    const showControl = prevSelected || currentSelected;
     if (current.type === 'moveTo' || current.type === 'lineTo') {
       if (pointClose(current.x, current.y)) {
         return [index, 0];
@@ -472,17 +478,17 @@ export function hitTestBezierControlPoints(
       if (pointClose(current.x, current.y)) {
         return [index, 0];
       }
-      if (selected && pointClose(current.controlX, current.controlY)) {
+      if (showControl && pointClose(current.controlX, current.controlY)) {
         return [index, 1];
       }
     } else if (current.type === 'cubicCurveTo') {
       if (pointClose(current.x, current.y)) {
         return [index, 0];
       }
-      if (selected && pointClose(current.controlX1, current.controlY1)) {
+      if (showControl && pointClose(current.controlX1, current.controlY1)) {
         return [index, 1];
       }
-      if (selected && pointClose(current.controlX2, current.controlY2)) {
+      if (showControl && pointClose(current.controlX2, current.controlY2)) {
         return [index, 2];
       }
     }

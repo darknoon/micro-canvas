@@ -41,13 +41,13 @@ const designSystem = {
     bezierPointFill: tw.theme.colors.white,
     bezierPointStroke: tw.theme.colors.blue[500],
     bezierPointFillSelected: tw.theme.colors.blue[500],
-    bezierPointStrokeSelected: tw.theme.colors.blue[500],
+    bezierPointStrokeSelected: tw.theme.colors.white,
 
     bezierControlPointFill: tw.theme.colors.white,
     bezierControlPointStroke: tw.theme.colors.blue[500],
-    bezierControlPointFillSelected: tw.theme.colors.blue[300],
-    bezierControlPointStrokeSelected: tw.theme.colors.blue[700],
-    bezierControlPointArmStroke: tw.theme.colors.blue[300],
+    bezierControlPointFillSelected: tw.theme.colors.blue[500],
+    bezierControlPointStrokeSelected: tw.theme.colors.white,
+    bezierControlPointArmStroke: tw.theme.colors.blue[500],
     bezierControlPointArmWidth: 1,
     bezierControlPointWidth: 3,
     bezierControlPointHitRadius: 5,
@@ -698,24 +698,24 @@ export class CanvasEditor implements Disposable {
       this.ctx.save();
       this.ctx.translate(obj.translation.x, obj.translation.y);
 
-      const drawCurvePoint = (x: number, y: number, selected: boolean) => {
+      const drawPoint = (x: number, y: number, selected: boolean) => {
         this.ctx.beginPath();
         this.ctx.arc(x, y, 3, 0, 2 * Math.PI);
         this.ctx.fillStyle = selected ? DS.bezierPointFillSelected : DS.bezierPointFill;
-        this.ctx.fill();
         this.ctx.strokeStyle = selected ? DS.bezierPointStrokeSelected : DS.bezierPointStroke;
+        this.ctx.fill();
         this.ctx.stroke();
       };
 
       const drawControlPoint = (x: number, y: number, selected: boolean) => {
         this.ctx.beginPath();
-        this.ctx.fillStyle = selected
-          ? DS.bezierControlPointFill
-          : DS.bezierControlPointFillSelected;
-        this.ctx.strokeStyle = selected
-          ? DS.bezierControlPointStroke
-          : DS.bezierControlPointStrokeSelected;
         const r = DS.bezierControlPointWidth;
+        this.ctx.fillStyle = selected
+          ? DS.bezierControlPointFillSelected
+          : DS.bezierControlPointFill;
+        this.ctx.strokeStyle = selected
+          ? DS.bezierControlPointStrokeSelected
+          : DS.bezierControlPointStroke;
         this.ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
         this.ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
       };
@@ -729,47 +729,45 @@ export class CanvasEditor implements Disposable {
         this.ctx.stroke();
       };
 
-      for (let i = 0; i < obj.controlPoints.length; i++) {
-        const point = obj.controlPoints[i];
-        console.log('point', point, 'selection', [
-          this.bezierSelection.get(i, 0),
-          this.bezierSelection.get(i, 1),
-          this.bezierSelection.get(i, 2),
-        ]);
-        if (point.type === 'moveTo') {
-          drawCurvePoint(point.x, point.y, this.bezierSelection.get(i, 0));
-        } else if (point.type === 'lineTo') {
-          const selected = this.bezierSelection.get(i, 0);
-          drawCurvePoint(point.x, point.y, selected);
-        } else if (point.type === 'quadraticCurveTo') {
-          const s0 = this.bezierSelection.get(i, 0);
-          const s1 = this.bezierSelection.get(i, 1);
-          const hasNext = i + 1 < obj.controlPoints.length;
-          const n0 = hasNext && this.bezierSelection.get(i + 1, 0);
-          drawCurvePoint(point.x, point.y, s0);
-          // If this quad curve is selected, draw the control point
-          if (s0 || s1 || n0) {
-            drawControlArm(point.x, point.y, point.controlX, point.controlY);
-            drawControlPoint(point.controlX, point.controlY, s1);
-          }
-        } else if (point.type === 'cubicCurveTo') {
-          const s0 = this.bezierSelection.get(i, 0);
-          const s1 = this.bezierSelection.get(i, 1);
-          const s2 = this.bezierSelection.get(i, 2);
-          const hasPrev = i > 0;
-          const p0 = hasPrev && this.bezierSelection.get(i - 1, 0);
-          drawCurvePoint(point.x, point.y, s0);
-          // If either end of this cubic curve segment is selected, draw the control points, also if either control point is selected
-          if (s0 || s1 || s2 || p0) {
-            if (hasPrev) {
-              const prevPoint = obj.controlPoints[i - 1];
-              if (prevPoint.type !== 'closePath') {
-                drawControlArm(prevPoint.x, prevPoint.y, point.controlX1, point.controlY1);
-              }
+      // Draw in layers so that control points are on top of arms, etc.
+      for (const layer of ['arms', 'points', 'controlPoints']) {
+        for (const { prev, current: point, index: i } of obj.segments()) {
+          const s = this.bezierSelection;
+          // TODO: deduplicate this code with the Path object
+          const prevSelected = prev ? s.get(i - 1, 0) || s.get(i - 1, 1) || s.get(i - 1, 2) : false;
+          const currentSelected = s.get(i, 0) || s.get(i, 1) || s.get(i, 2);
+          const showControl = prevSelected || currentSelected;
+
+          if (layer === 'points') {
+            const selected = s.get(i, 0);
+            if (point.type === 'moveTo') {
+              drawPoint(point.x, point.y, s.get(i, 0));
+            } else if (point.type === 'lineTo') {
+              drawPoint(point.x, point.y, selected);
+            } else if (point.type === 'quadraticCurveTo') {
+              drawPoint(point.x, point.y, selected);
+            } else if (point.type === 'cubicCurveTo') {
+              drawPoint(point.x, point.y, selected);
             }
-            drawControlArm(point.x, point.y, point.controlX2, point.controlY2);
-            drawControlPoint(point.controlX1, point.controlY1, s1);
-            drawControlPoint(point.controlX2, point.controlY2, s2);
+          } else if (layer === 'arms') {
+            if (point.type === 'quadraticCurveTo' && showControl) {
+              drawControlArm(point.x, point.y, point.controlX, point.controlY);
+            } else if (point.type === 'cubicCurveTo' && showControl) {
+              if (prev && prev.type !== 'closePath') {
+                drawControlArm(prev.x, prev.y, point.controlX1, point.controlY1);
+              }
+              drawControlArm(point.x, point.y, point.controlX2, point.controlY2);
+            }
+          } else if (layer === 'controlPoints') {
+            if (point.type === 'quadraticCurveTo' && showControl) {
+              const s1 = s.get(i, 1);
+              drawControlPoint(point.controlX, point.controlY, s1);
+            } else if (point.type === 'cubicCurveTo' && showControl) {
+              const s1 = s.get(i, 1);
+              const s2 = s.get(i, 2);
+              drawControlPoint(point.controlX1, point.controlY1, s1);
+              drawControlPoint(point.controlX2, point.controlY2, s2);
+            }
           }
         }
       }
@@ -780,7 +778,7 @@ export class CanvasEditor implements Disposable {
         !this.isDraggingBezierPoints
       ) {
         const { x, y } = obj.pointForNearestSegment(this.nearestBezierSegment);
-        drawCurvePoint(x, y, false);
+        drawPoint(x, y, false);
       }
       this.ctx.restore();
     } else {
