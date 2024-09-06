@@ -1,6 +1,6 @@
 import './style.css';
 import { CanvasEditor } from './canvas';
-import { TopBar } from './topBar';
+// import { TopBar } from './topBar';
 import { ToolShelf } from './toolShelf';
 
 // style html elem
@@ -21,7 +21,7 @@ parent.innerHTML = `
 `;
 
 const canvasContainerElem = parent.querySelector<HTMLDivElement>('#canvasEditor')!;
-const topBarElem = parent.querySelector<HTMLDivElement>('#topBar')!;
+// const topBarElem = parent.querySelector<HTMLDivElement>('#topBar')!;
 const toolbarElem = parent.querySelector<HTMLDivElement>('#toolbar')!;
 
 // initialize the app and connect the components
