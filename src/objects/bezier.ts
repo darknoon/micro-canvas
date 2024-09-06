@@ -30,6 +30,9 @@ export class PathLayer implements CanvasObject {
   constructor(public id: number) {}
 
   public translation: Point2D = { x: 0, y: 0 };
+  public fill: string | null = 'currentColor';
+  public stroke: string | null = null;
+  public strokeWidth: number | null = null;
 
   private _controlPoints: BezierControlPoint[] = [
     // Head
@@ -374,6 +377,30 @@ export class PathLayer implements CanvasObject {
     ctx.fill();
     ctx.closePath();
     ctx.restore();
+  }
+
+  public toSVGPath(): string {
+    let path = '';
+    for (const point of this._controlPoints) {
+      switch (point.type) {
+        case 'moveTo':
+          path += `M ${point.x} ${point.y} `;
+          break;
+        case 'lineTo':
+          path += `L ${point.x} ${point.y} `;
+          break;
+        case 'quadraticCurveTo':
+          path += `Q ${point.controlX} ${point.controlY} ${point.x} ${point.y} `;
+          break;
+        case 'cubicCurveTo':
+          path += `C ${point.controlX1} ${point.controlY1} ${point.controlX2} ${point.controlY2} ${point.x} ${point.y} `;
+          break;
+        case 'closePath':
+          path += 'Z ';
+          break;
+      }
+    }
+    return path.trim();
   }
 }
 

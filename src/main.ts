@@ -1,6 +1,6 @@
 import './style.css';
 import { CanvasEditor } from './canvas';
-// import { TopBar } from './topBar';
+import { TopBar } from './topBar';
 import { ToolShelf } from './toolShelf';
 
 // style html elem
@@ -21,18 +21,43 @@ parent.innerHTML = `
 `;
 
 const canvasContainerElem = parent.querySelector<HTMLDivElement>('#canvasEditor')!;
-// const topBarElem = parent.querySelector<HTMLDivElement>('#topBar')!;
+const topBarElem = parent.querySelector<HTMLDivElement>('#topBar')!;
 const toolbarElem = parent.querySelector<HTMLDivElement>('#toolbar')!;
 
 // initialize the app and connect the components
 
 // topBar not really doing anything yet
-// const topBar = new TopBar(topBarElem);
+const topBar = new TopBar(topBarElem);
+
+topBar.addEventListener('copy', () => {
+  const text = editor.exportSVG();
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      console.log('SVG content copied to clipboard');
+    })
+    .catch(err => {
+      console.error('Failed to copy SVG content: ', err);
+    });
+});
 const tools = new ToolShelf(toolbarElem);
 let editor = new CanvasEditor(canvasContainerElem);
 
 tools.addEventListener('toolSelected', () => {
   editor.activeToolId = tools.activeToolId;
+});
+
+topBar.addEventListener('save', () => {
+  const text = editor.exportSVG();
+  const blob = new Blob([text], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'canvas_export.svg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 });
 
 if (import.meta.hot) {

@@ -11,12 +11,17 @@ todo:
   - [x] add point on curve
   - [ ] pen tool draw out points
   - [x] select & move points
+- [ ] misc pen tool stuff
+  - [ ] option-click to remove point
 - [ ] arrow keys for moving points and shapes
   - [ ] basic arrow key movement
   - [ ] shift+arrow keys for moving faster
 - [ ] save/load
   - [ ] save/load localStorage
   - [ ] save/load to/from clipboard
+- [ ] undo/redo
+  - [ ] undo/redo stack
+  - [ ] handle coalescing multiple actions
 - [ ] inspector panel?
   - [ ] show selected shape properties
   - [ ] edit selected shape properties

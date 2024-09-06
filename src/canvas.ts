@@ -282,30 +282,13 @@ export class CanvasEditor implements Disposable {
   private onMouseDown(e: MouseEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e);
     const DS = this.DS;
-    if (e.button === 1) {
-      // Middle mouse button
-
-      this.isMiddleDragging = true;
-      this.lastDragX = localX;
-      this.lastDragY = localY;
-
-      // Listen on the window to capture mouse move/up events outside the canvas
-      this.beginEvent();
-      const onMouseMove = this.onMiddleDrag.bind(this);
-      const onMouseUp = this.onMiddleDragUp.bind(this);
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-      this.eventCleanups.push(() => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      });
-    } else if (e.button === 0) {
+    if (e.button === 0) {
       // Left mouse button
       const canvasX = localX + this.scrollX;
       const canvasY = localY + this.scrollY;
 
       if (this.isEditingBezier) {
-        const path = this.objects.find(o => o.id === this.selection[0]);
+        const path = this.bezierEditingObject;
         if (!path || !(path instanceof PathLayer)) {
           throw new Error('Expected selected object to be a Bezier');
         }
@@ -395,6 +378,23 @@ export class CanvasEditor implements Disposable {
           window.removeEventListener('mouseup', onMouseUp);
         });
       }
+    } else if (e.button === 1) {
+      // Middle mouse button
+
+      this.isMiddleDragging = true;
+      this.lastDragX = localX;
+      this.lastDragY = localY;
+
+      // Listen on the window to capture mouse move/up events outside the canvas
+      this.beginEvent();
+      const onMouseMove = this.onMiddleDrag.bind(this);
+      const onMouseUp = this.onMiddleDragUp.bind(this);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+      this.eventCleanups.push(() => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      });
     }
   }
 
@@ -688,7 +688,7 @@ export class CanvasEditor implements Disposable {
       if (this.selection.length !== 1) {
         throw new Error('Expected exactly one object to be selected in bezier editing mode');
       }
-      const obj = this.objects.find(o => o.id === this.selection[0]);
+      const obj = this.bezierEditingObject;
       if (!obj || !(obj instanceof PathLayer)) {
         throw new Error('Expected selected object to be a Bezier');
       }
@@ -844,10 +844,44 @@ export class CanvasEditor implements Disposable {
   }
 
   public resize(width: number, height: number): void {
-    //oeu
     this.canvas.width = width * this.devicePixelRatio;
     this.canvas.height = height * this.devicePixelRatio;
     this.redraw();
+  }
+
+  public exportSVG(): string {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', this.canvas.width.toString());
+    svg.setAttribute('height', this.canvas.height.toString());
+
+    for (const object of this.objects) {
+      if (object instanceof PathLayer) {
+        const path = document.createElementNS(svgNS, 'path');
+        const svgPath = object.toSVGPath();
+        path.setAttribute('d', svgPath);
+        path.setAttribute('fill', object.fill || 'none');
+        path.setAttribute('stroke', object.stroke || 'none');
+        path.setAttribute('stroke-width', object.strokeWidth?.toString() || '1');
+        path.setAttribute(
+          'transform',
+          `translate(${object.translation.x},${object.translation.y})`
+        );
+        svg.appendChild(path);
+      } else if (object instanceof RedCircle) {
+        const circle = document.createElementNS(svgNS, 'circle');
+        circle.setAttribute('cx', (object.translation.x + object.size.width / 2).toString());
+        circle.setAttribute('cy', (object.translation.y + object.size.height / 2).toString());
+        circle.setAttribute('r', (object.size.width / 2).toString());
+        circle.setAttribute('fill', 'red');
+        circle.setAttribute('stroke', 'none');
+        circle.setAttribute('stroke-width', '1');
+        svg.appendChild(circle);
+      }
+    }
+
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(svg);
   }
 
   public dispose(): void {
