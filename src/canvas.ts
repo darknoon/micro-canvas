@@ -202,6 +202,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     const dpr = this.devicePixelRatio
     this.scrollX = Math.round(this.scrollX * dpr) / dpr
     this.scrollY = Math.round(this.scrollY * dpr) / dpr
+    this.dispatchViewportChanged()
     this.redraw()
   }
 
