@@ -1,3 +1,4 @@
+import { Artboard } from './objects/artboard';
 import { buildDotPatternImage } from './dotGrid';
 import { AABB, intersectAABB, Point2D } from './geom';
 import {
@@ -24,9 +25,10 @@ export type CanvasID = number;
 export interface CanvasObject {
   id: CanvasID;
   readonly boundingBox: AABB;
+  readonly locked?: boolean;
   translation: Point2D;
   draw(ctx: CanvasRenderingContext2D): void;
-  toSVG(): SVGElement;
+  toSVG?(): SVGElement;
 }
 
 const designSystem = {
@@ -119,7 +121,11 @@ export class CanvasEditor implements Disposable {
 
   /// Scene graph
   // Factories object maps from a name of a subtype of CanvasObject to a function that creates an instance of that subtype
-  private factories: { circle: () => RedCircle; bezier: () => PathLayer };
+  private factories: {
+    circle: () => RedCircle;
+    bezier: () => PathLayer;
+    artboard: (x: number, y: number, w: number, h: number) => Artboard;
+  };
   private nextId = 1;
   private selection: CanvasID[] = [];
   private objects: CanvasObject[];
@@ -145,11 +151,17 @@ export class CanvasEditor implements Disposable {
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
 
     this.factories = {
+      artboard: (x: number, y: number, w: number, h: number) =>
+        new Artboard(this.nextId++, x, y, w, h),
       circle: () => new RedCircle(this.nextId++),
       bezier: () => new PathLayer(this.nextId++),
     };
 
-    this.objects = [this.factories.circle(), this.factories.bezier()];
+    this.objects = [
+      this.factories.artboard(128, 128, 256, 256),
+      this.factories.circle(),
+      this.factories.bezier(),
+    ];
 
     this.container.appendChild(this.canvas);
     this.disposers.push(() => this.container.removeChild(this.canvas));
@@ -189,6 +201,7 @@ export class CanvasEditor implements Disposable {
 
   private hitTest(x: number, y: number): CanvasObject | null {
     for (const object of this.objects) {
+      if (object.locked) continue;
       const { x: x0, y: y0, width, height } = object.boundingBox;
       if (x >= x0 && x <= x0 + width && y >= y0 && y <= y0 + height) {
         return object;
@@ -500,7 +513,10 @@ export class CanvasEditor implements Disposable {
 
       // Check each object for intersection with the selection box
       for (const object of this.objects) {
-        if (intersectAABB(this.selectionBoundingBox, object.boundingBox)) {
+        if (
+          !(object.locked ?? false) &&
+          intersectAABB(this.selectionBoundingBox, object.boundingBox)
+        ) {
           this.selection.push(object.id);
         }
       }
@@ -857,11 +873,9 @@ export class CanvasEditor implements Disposable {
     svg.setAttribute('height', this.canvas.height.toString());
 
     for (const object of this.objects) {
-      if ('toSVG' in object) {
+      if ('toSVG' in object && typeof object.toSVG === 'function') {
         const path = object.toSVG();
         svg.appendChild(path);
-      } else {
-        console.warn('Object does not implement toSVG:', object);
       }
     }
 
