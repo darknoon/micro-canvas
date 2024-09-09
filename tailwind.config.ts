@@ -1,8 +1,14 @@
 import type { Config } from "tailwindcss";
+import colors from "tailwindcss/colors";
+
 export default {
   content: ["src/*.ts"],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        brand: colors.indigo,
+      },
+    },
   },
   darkMode: [
     "variant",

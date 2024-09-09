@@ -24,9 +24,21 @@ export class Artboard implements CanvasObject {
 
   draw(ctx: CanvasRenderingContext2D): void {
     const originalGlobalAlpha = ctx.globalAlpha
-    ctx.globalAlpha = 0.5
-    ctx.strokeRect(this.translation.x, this.translation.y, this.width, this.height)
+    const originalLineWidth = ctx.lineWidth
+    const outset = 0.5
+    ctx.globalAlpha = 0.25
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.roundRect(
+      this.translation.x - outset,
+      this.translation.y - outset,
+      this.width + 2 * outset,
+      this.height + 2 * outset,
+      2,
+    )
+    ctx.stroke()
     ctx.globalAlpha = originalGlobalAlpha
+    ctx.lineWidth = originalLineWidth
   }
 
   private calculateBoundingBox(): AABB {

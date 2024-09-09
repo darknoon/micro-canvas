@@ -9,13 +9,10 @@ import {
 } from "./objects/bezier"
 import { RedCircle } from "./objects/redCircle"
 
-import resolveConfig from "tailwindcss/resolveConfig"
-import tailwindConfigData from "../tailwind.config"
 import { Disposable } from "./interface/disposable"
 import { Tool } from "./toolShelf"
 import { MultiArray } from "./multiArray"
-
-const tw = resolveConfig(tailwindConfigData)
+import { designSystem } from "./designSystem"
 
 export const GRID_SIZE = 16
 export const DEBUG = true
@@ -34,59 +31,6 @@ export interface CanvasObject {
   translation: Point2D
   draw(ctx: CanvasRenderingContext2D): void
   toSVG?(): SVGElement
-}
-
-const designSystem = {
-  light: {
-    canvasBackground: tw.theme.colors.white,
-    canvasBackgroundDot: tw.theme.colors.gray[300],
-
-    selectionDragBoxStroke: tw.theme.colors.gray[500],
-    selectionDragBoxFill: tw.theme.colors.gray[200],
-    selectionDragBoxFillOpacity: 0.25,
-    selectionBox: tw.theme.colors.blue[500],
-
-    bezierPointFill: tw.theme.colors.white,
-    bezierPointStroke: tw.theme.colors.blue[500],
-    bezierPointFillSelected: tw.theme.colors.blue[500],
-    bezierPointStrokeSelected: tw.theme.colors.white,
-
-    bezierControlPointFill: tw.theme.colors.white,
-    bezierControlPointStroke: tw.theme.colors.blue[500],
-    bezierControlPointFillSelected: tw.theme.colors.blue[500],
-    bezierControlPointStrokeSelected: tw.theme.colors.white,
-    bezierControlPointArmStroke: tw.theme.colors.blue[500],
-    bezierControlPointArmWidth: 1,
-    bezierControlPointWidth: 3,
-    bezierControlPointHitRadius: 5,
-
-    debugText: tw.theme.colors.black,
-  },
-  dark: {
-    canvasBackground: tw.theme.colors.gray[900],
-    canvasBackgroundDot: tw.theme.colors.gray[700],
-
-    selectionDragBoxStroke: tw.theme.colors.gray[400],
-    selectionDragBoxFill: tw.theme.colors.gray[700],
-    selectionDragBoxFillOpacity: 0.25,
-    selectionBox: tw.theme.colors.blue[400],
-
-    bezierPointFill: tw.theme.colors.gray[900],
-    bezierPointStroke: tw.theme.colors.blue[400],
-    bezierPointFillSelected: tw.theme.colors.blue[400],
-    bezierPointStrokeSelected: tw.theme.colors.gray[900],
-
-    bezierControlPointFill: tw.theme.colors.gray[900],
-    bezierControlPointStroke: tw.theme.colors.blue[400],
-    bezierControlPointFillSelected: tw.theme.colors.blue[400],
-    bezierControlPointStrokeSelected: tw.theme.colors.gray[900],
-    bezierControlPointArmStroke: tw.theme.colors.blue[400],
-    bezierControlPointArmWidth: 1,
-    bezierControlPointWidth: 3,
-    bezierControlPointHitRadius: 5,
-
-    debugText: tw.theme.colors.white,
-  },
 }
 
 export class CanvasEditor extends EventTarget implements Disposable {

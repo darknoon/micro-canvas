@@ -92,7 +92,8 @@ export class ToolShelf extends EventTarget implements Disposable {
 
     this.items.forEach(item => {
       const label = document.createElement("label")
-      label.className = "flex items-center justify-center w-8 h-8 rounded-sm cursor-pointer"
+      label.className =
+        "flex items-center justify-center w-8 h-8 first:rounded-l-full last:rounded-r-full cursor-pointer"
       label.title = item.label
 
       const input = document.createElement("input")
@@ -120,16 +121,15 @@ export class ToolShelf extends EventTarget implements Disposable {
       fieldset.appendChild(label)
 
       // Apply styles based on selection state
-      if (item.id === this._activeTool) {
-        label.classList.add("bg-blue-500", "text-white", "dark:bg-blue-600")
-      } else {
-        label.classList.add(
-          "bg-white",
-          "dark:bg-gray-800",
-          "hover:bg-gray-100",
-          "dark:hover:bg-gray-700",
-        )
-      }
+      label.classList.add(
+        "bg-white",
+        "dark:bg-gray-800",
+        "hover:bg-gray-100",
+        "dark:hover:bg-gray-700",
+        "has-[:checked]:bg-brand-500",
+        "has-[:checked]:text-white",
+        "has-[:checked]:dark:bg-brand-600",
+      )
     })
 
     this.container.appendChild(fieldset)

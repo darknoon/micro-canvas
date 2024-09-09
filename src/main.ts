@@ -11,9 +11,9 @@ parent.innerHTML = `
   <div id="topBar"></div>
   <div id="canvasWrapper" class="flex justify-center items-center h-[calc(100vh-50px)]">
     <div id="canvasEditor" class="w-[512px] h-[512px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-clip relative">
-      <div id="preview" class="absolute top-2 right-2 w-32 h-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border-2 border-gray-300 dark:border-gray-600 overflow-hidden">
+      <div id="preview" class="absolute top-2 right-2 w-32 h-32 bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 border-gray-300 dark:border-gray-600 overflow-hidden">
       </div>
-      <div id="toolbar" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-2 flex space-x-2"></div>
+      <div id="toolbar" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-full shadow-sm p-2 flex space-x-2"></div>
     </div>
   </div>
 `
