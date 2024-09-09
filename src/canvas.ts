@@ -1,5 +1,5 @@
 import { Artboard } from "./objects/artboard"
-import { buildDotPatternImage } from "./dotGrid"
+import { buildDotGridPatternImage } from "./dotGrid"
 import { AABB, intersectAABB, Point2D } from "./geom"
 import {
   PathLayer,
@@ -247,7 +247,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
       const dpr = this.devicePixelRatio
       const DS = this.DS
       // Create a pattern for the background
-      const patternCanvas = buildDotPatternImage(dpr, DS.canvasBackgroundDot)
+      const patternCanvas = buildDotGridPatternImage(dpr, DS.canvasBackgroundDot)
       // Set the background pattern
       const pattern = this.ctx.createPattern(patternCanvas, "repeat")
       if (!pattern) throw new Error("Failed to create canvas background")
