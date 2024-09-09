@@ -1,6 +1,5 @@
-
-
 goals:
+
 - very minimal vector drawing app
 - easy to embed anywhere, eg Gradio for doing AI vector drawing
 - support enough features to allow humans to "do it the hard way" for datasets
@@ -8,6 +7,7 @@ goals:
 - lightweight and performant for smooth drawing experience
 
 todo:
+
 - [ ] basic bézier curve drawing (via bezier.js)
   - [x] correct bounding box
   - [x] add point on curve

@@ -1,11 +1,7 @@
 {
-    "singleQuote": true,
-    "trailingComma": "es5",
-    "tabWidth": 2,
-    "semi": true,
-    "printWidth": 100,
-    "arrowParens": "avoid",
-    "ignoredVars": [
-        "^_"
-    ]
+  "trailingComma": "all",
+  "tabWidth": 2,
+  "semi": false,
+  "printWidth": 100,
+  "arrowParens": "avoid"
 }
