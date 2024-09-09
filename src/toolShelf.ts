@@ -39,7 +39,6 @@ export class ToolShelf extends EventTarget implements Disposable {
       { id: Tool.PENCIL, label: "Pencil", iconSVG: pencil, shortcut: "P" },
     ]
 
-    console.log("ToolShelf", arrow)
     this.updateDOM()
 
     const handleKeyDown = this.handleKeyDown.bind(this)

@@ -1,5 +1,5 @@
 import "./style.css"
-import { CanvasEditor } from "./canvas"
+import { CanvasEditor, Events } from "./canvas"
 import { TopBar } from "./topBar"
 import { ToolShelf } from "./toolShelf"
 
@@ -10,9 +10,12 @@ const parent = document.querySelector<HTMLDivElement>("#app")!
 parent.innerHTML = `
   <div id="topBar"></div>
   <div id="canvasWrapper" class="flex justify-center items-center h-[calc(100vh-50px)]">
-    <div id="canvasEditor" class="w-[512px] h-[512px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-clip"></div>
-  <div id="toolbar" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-2 flex space-x-2"></div>
+    <div id="canvasEditor" class="w-[512px] h-[512px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-clip relative">
+      <div id="preview" class="absolute top-2 right-2 w-32 h-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border-2 border-gray-300 dark:border-gray-600 overflow-hidden">
+      </div>
+    </div>
   </div>
+  <div id="toolbar" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-2 flex space-x-2"></div>
 `
 
 const canvasContainerElem = parent.querySelector<HTMLDivElement>("#canvasEditor")!
@@ -37,6 +40,22 @@ topBar.addEventListener("copy", () => {
 })
 const tools = new ToolShelf(toolbarElem)
 let editor = new CanvasEditor(canvasContainerElem)
+
+// Listen to preview changes
+editor.addEventListener(Events.CONTENT_CHANGED, updatePreview)
+
+function updatePreview() {
+  const text = editor.exportSVG()
+  const preview = canvasContainerElem.querySelector<HTMLDivElement>("#preview")!
+  preview.innerHTML = text // Clear previous content and add new SVG
+  const svg = preview.querySelector("svg")
+  if (svg) {
+    svg.setAttribute("width", "100%")
+    svg.setAttribute("height", "100%")
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet")
+  }
+}
+updatePreview()
 
 tools.addEventListener("toolSelected", () => {
   editor.activeToolId = tools.activeToolId

@@ -22,6 +22,11 @@ export const DEBUG = true
 
 export type CanvasID = number
 
+export enum Events {
+  CONTENT_CHANGED = "contentChanged",
+  VIEWPORT_CHANGED = "viewportChanged",
+}
+
 export interface CanvasObject {
   id: CanvasID
   readonly boundingBox: AABB
@@ -84,7 +89,7 @@ const designSystem = {
   },
 }
 
-export class CanvasEditor implements Disposable {
+export class CanvasEditor extends EventTarget implements Disposable {
   /**
    * CanvasEditor is a class that manages a canvas element and its rendering context.
    * Logically, it has an infinite size.
@@ -99,8 +104,8 @@ export class CanvasEditor implements Disposable {
   private isDarkMode: boolean = false
 
   // Scroll position in canvas coordinates
-  private scrollX = 0
-  private scrollY = 0
+  private scrollX = -128
+  private scrollY = -128
 
   // Reused for drag/pan events, stores previous mouse position within our element so we can calculate the delta
   private lastDragX?: number
@@ -136,6 +141,7 @@ export class CanvasEditor implements Disposable {
   private _activeToolId: Tool = Tool.HAND
 
   constructor(container: HTMLElement) {
+    super()
     this.container = container
     this.canvas = document.createElement("canvas")
     const dpr = window.devicePixelRatio || 1
@@ -158,7 +164,7 @@ export class CanvasEditor implements Disposable {
     }
 
     this.objects = [
-      this.factories.artboard(128, 128, 256, 256),
+      this.factories.artboard(0, 0, 256, 256),
       this.factories.circle(),
       this.factories.bezier(),
     ]
@@ -348,6 +354,7 @@ export class CanvasEditor implements Disposable {
           const s = new MultiArray([path.controlPoints.length, 3], false)
           s.set(true, newSelectionIndex, 0)
           this.bezierSelection = s
+          this.dispatchContentChanged()
         } else {
           // Clicked something that is not a control point. Ignore.
         }
@@ -491,6 +498,7 @@ export class CanvasEditor implements Disposable {
     this.lastDragX = localX
     this.lastDragY = localY
     this.redraw()
+    this.dispatchContentChanged()
   }
 
   private onObjectDragUp(): void {
@@ -590,6 +598,7 @@ export class CanvasEditor implements Disposable {
     })
 
     bzo.controlPoints = newControlPoints
+    this.dispatchContentChanged()
     this.redraw()
   }
 
@@ -860,6 +869,14 @@ export class CanvasEditor implements Disposable {
     }
   }
 
+  private dispatchContentChanged(): void {
+    this.dispatchEvent(new CustomEvent(Events.CONTENT_CHANGED))
+  }
+
+  private dispatchViewportChanged(): void {
+    this.dispatchEvent(new CustomEvent(Events.VIEWPORT_CHANGED))
+  }
+
   public resize(width: number, height: number): void {
     this.canvas.width = width * this.devicePixelRatio
     this.canvas.height = height * this.devicePixelRatio
@@ -871,6 +888,13 @@ export class CanvasEditor implements Disposable {
     const svg = document.createElementNS(svgNS, "svg")
     svg.setAttribute("width", this.canvas.width.toString())
     svg.setAttribute("height", this.canvas.height.toString())
+    const currentArtboard = this.objects.find(obj => obj instanceof Artboard)
+    if (currentArtboard) {
+      const { x, y, width, height } = currentArtboard.boundingBox
+      svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`)
+    } else {
+      svg.setAttribute("viewBox", `0 0 ${this.canvas.width} ${this.canvas.height}`)
+    }
 
     for (const object of this.objects) {
       if ("toSVG" in object && typeof object.toSVG === "function") {
