@@ -364,6 +364,24 @@ export class CanvasEditor extends EventTarget implements Disposable {
     }
   }
 
+  private onDoubleClick(e: MouseEvent): void {
+    const { x: localX, y: localY } = this.canvasCoords(e)
+    const object = this.hitTest(localX, localY)
+    // if you double click a bezier, start editing it
+    if (object instanceof PathLayer) {
+      this.isEditingBezier = true
+      this.bezierSelection = new MultiArray([object.controlPoints.length, 3], false)
+      this.selection = [object.id]
+      this.redraw()
+      e.preventDefault()
+    } else if (this.isEditingBezier) {
+      this.isEditingBezier = false
+      this.updateCursor()
+      this.redraw()
+      e.preventDefault()
+    }
+  }
+
   private get bezierEditingObject(): PathLayer | undefined {
     if (this.selection.length !== 1) return undefined
     const obj = this.objects.find(o => o.id === this.selection[0])
@@ -600,6 +618,12 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.canvas.addEventListener("mousemove", onMouseMove)
     this.disposers.push(() => {
       this.canvas.removeEventListener("mousemove", onMouseMove)
+    })
+
+    const onDoubleClick = this.onDoubleClick.bind(this)
+    this.canvas.addEventListener("dblclick", onDoubleClick)
+    this.disposers.push(() => {
+      this.canvas.removeEventListener("dblclick", onDoubleClick)
     })
 
     // Listen for device pixel ratio changes
