@@ -748,11 +748,14 @@ export class CanvasEditor extends EventTarget implements Disposable {
     })
 
     // Listen for device pixel ratio changes
+    // Observe device pixel ratio changes
     const onDevicePixelRatioChange = this.onDevicePixelRatioChange.bind(this)
-    window.matchMedia("(resolution)").addEventListener("change", onDevicePixelRatioChange)
+    const mediaQueryList = window.matchMedia(`(resolution: ${this.devicePixelRatio}dppx)`)
+    mediaQueryList.addEventListener("change", onDevicePixelRatioChange)
     this.disposers.push(() =>
-      window.matchMedia("(resolution)").removeEventListener("change", onDevicePixelRatioChange),
+      mediaQueryList.removeEventListener("change", onDevicePixelRatioChange),
     )
+
     // Listen for color scheme changes
     const dmq = window.matchMedia("(prefers-color-scheme: dark)")
     const onColorSchemeChange = this.onColorSchemeChange.bind(this)
