@@ -6,6 +6,7 @@ import {
   BezierSubselection,
   BezierNearestSegment,
   hitTestBezierControlPoints,
+  BezierControlPoint,
 } from "./objects/bezier"
 import { RedCircle } from "./objects/redCircle"
 
@@ -241,9 +242,129 @@ export class CanvasEditor extends EventTarget implements Disposable {
           e.preventDefault()
         }
       }
+    } else if (e.key === "Backspace") {
+      if (this.isEditingBezier && this.bezierSelection) {
+        const bzo = this.bezierEditingObject
+        if (!bzo) throw new Error("Expected selected object to be a Bezier")
+        if (!this.bezierSelection) throw new Error("Expected bezier selection to be set")
+        // TODO: implement this primitive inside a bezier model layer
+        const toDelete: number[] = []
+        for (let i = 0; i < bzo.controlPoints.length; i++) {
+          if (this.bezierSelection.get(i, 0)) {
+            toDelete.push(i)
+            break
+          }
+        }
+        bzo.controlPoints = bzo.controlPoints.filter((_, i) => !toDelete.includes(i))
+        this.bezierSelection = new MultiArray([bzo.controlPoints.length, 3], false)
+        this.updateCursor()
+        this.redraw()
+        e.preventDefault()
+      } else {
+        // delete the selected objects
+        this.objects = this.objects.filter(o => !this.selection.includes(o.id))
+        this.selection = []
+        this.dispatchContentChanged()
+        this.redraw()
+        e.preventDefault()
+      }
+    } else if (
+      e.key === "ArrowUp" ||
+      e.key === "ArrowDown" ||
+      e.key === "ArrowLeft" ||
+      e.key === "ArrowRight"
+    ) {
+      this.handleArrowKeys(e)
     }
   }
 
+  handleArrowKeys(e: KeyboardEvent) {
+    let increment = 1
+    let direction: [number, number] = [0, 0]
+    if (e.shiftKey) {
+      increment = 10
+    }
+    if (e.key === "ArrowUp") {
+      direction = [0, -1]
+    } else if (e.key === "ArrowDown") {
+      direction = [0, 1]
+    } else if (e.key === "ArrowLeft") {
+      direction = [-1, 0]
+    } else if (e.key === "ArrowRight") {
+      direction = [1, 0]
+    }
+
+    if (this.isEditingBezier && this.bezierSelection) {
+      const bzo = this.bezierEditingObject
+      if (!bzo) throw new Error("Expected selected object to be a Bezier")
+      const s = this.bezierSelection
+      // update the selected points
+      const newControlPoints: BezierControlPoint[] = bzo.controlPoints.map((p, i) => {
+        const s0 = s.get(i, 0)
+        const s1 = s.get(i, 1)
+        const s2 = s.get(i, 2)
+        if (p.type === "moveTo") {
+          if (s0) {
+            p = {
+              ...p,
+              x: p.x + direction[0] * increment,
+              y: p.y + direction[1] * increment,
+            }
+          }
+        } else if (p.type === "lineTo") {
+          if (s0) {
+            p = {
+              ...p,
+              x: p.x + direction[0] * increment,
+              y: p.y + direction[1] * increment,
+            }
+          }
+        } else if (p.type === "quadraticCurveTo") {
+          if (s0) {
+            p = {
+              ...p,
+              x: p.x + direction[0] * increment,
+              y: p.y + direction[1] * increment,
+            }
+          } else if (s1) {
+            p = {
+              ...p,
+              controlX: p.controlX + direction[0] * increment,
+              controlY: p.controlY + direction[1] * increment,
+            }
+          }
+        } else if (p.type === "cubicCurveTo") {
+          if (s0) {
+            p = {
+              ...p,
+              x: p.x + direction[0] * increment,
+              y: p.y + direction[1] * increment,
+              controlX1: p.controlX1 + direction[0] * increment,
+              controlY1: p.controlY1 + direction[1] * increment,
+              controlX2: p.controlX2 + direction[0] * increment,
+              controlY2: p.controlY2 + direction[1] * increment,
+            }
+          } else if (s1) {
+            p = {
+              ...p,
+              controlX1: p.controlX1 + direction[0] * increment,
+              controlY1: p.controlY1 + direction[1] * increment,
+            }
+          } else if (s2) {
+            p = {
+              ...p,
+              controlX2: p.controlX2 + direction[0] * increment,
+              controlY2: p.controlY2 + direction[1] * increment,
+            }
+          }
+        }
+        return p
+      })
+      bzo.controlPoints = newControlPoints
+      this.dispatchContentChanged()
+      this.redraw()
+    }
+  }
   private onMouseDown(e: MouseEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e)
     const DS = this.DS
