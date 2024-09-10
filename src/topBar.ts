@@ -10,7 +10,7 @@ export class TopBar extends EventTarget {
     super()
     this.topBar.innerHTML = ""
     this.topBar.className =
-      "h-[50px] w-full bg-gray-100 flex items-center justify-between px-4 bg-gray-50 text-sm"
+      "h-[50px] w-full bg-gray-100 dark:bg-gray-900 flex items-center justify-between px-4 text-sm"
 
     const title = document.createElement("h1")
     title.textContent = "Canvas Editor"
