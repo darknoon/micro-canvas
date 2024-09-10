@@ -1,5 +1,5 @@
-import type { Config } from "tailwindcss";
-import colors from "tailwindcss/colors";
+import type { Config } from "tailwindcss"
+import colors from "tailwindcss/colors"
 
 export default {
   content: ["src/*.ts"],
@@ -12,10 +12,7 @@ export default {
   },
   darkMode: [
     "variant",
-    [
-      "@media (prefers-color-scheme: dark) { &:not(.light *) }",
-      "&:is(.dark *)",
-    ],
+    ["@media (prefers-color-scheme: dark) { &:not(.light *) }", "&:is(.dark *)"],
   ],
   plugins: [],
-} satisfies Config;
+} satisfies Config
