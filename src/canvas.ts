@@ -14,6 +14,7 @@ import { Disposable } from "./interface/disposable"
 import { Tool } from "./toolShelf"
 import { MultiArray } from "./multiArray"
 import { designSystem } from "./designSystem"
+import { importSVG, exportSVG as toSVG } from "./svg"
 
 export const GRID_SIZE = 16
 export const DEBUG = true
@@ -762,6 +763,11 @@ export class CanvasEditor extends EventTarget implements Disposable {
     dmq.addEventListener("change", onColorSchemeChange)
     this.disposers.push(() => dmq.removeEventListener("change", onColorSchemeChange))
     this.isDarkMode = dmq.matches || document.documentElement.classList.contains("dark")
+
+    // Add paste event listener
+    const onPaste = this.onPaste.bind(this)
+    window.addEventListener("paste", onPaste)
+    this.disposers.push(() => window.removeEventListener("paste", onPaste))
   }
 
   private onDevicePixelRatioChange(): void {
@@ -774,6 +780,41 @@ export class CanvasEditor extends EventTarget implements Disposable {
         this.canvas.height / this.devicePixelRatio,
       )
     }
+  }
+
+  private onPaste(event: ClipboardEvent): void {
+    event.preventDefault()
+    const clipboardData = event.clipboardData
+    if (!clipboardData) return
+
+    // Check if the pasted content is SVG
+    const svgContent = clipboardData.getData("image/svg+xml")
+    if (svgContent) {
+      this.importSVG(svgContent)
+      return
+    }
+
+    // Optionally, handle text content that might be SVG
+    const textContent = clipboardData.getData("text/plain")
+    if (textContent.trim().startsWith("<svg")) {
+      this.importSVG(textContent)
+      return
+    }
+
+    // If we reach here, the pasted content wasn't SVG
+    console.log("Pasted content is not SVG")
+  }
+
+  public importSVG(svg: string): void {
+    const alloc = {
+      nextId: () => {
+        return this.nextId++
+      },
+    }
+    const objects = [...this.objects, ...importSVG(svg, alloc)]
+    this.objects = objects
+    this.dispatchContentChanged()
+    this.redraw()
   }
 
   private redraw(): void {
@@ -976,54 +1017,8 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.redraw()
   }
 
-  public exportSVG(): string {
-    const svgNS = "http://www.w3.org/2000/svg"
-    const svg = document.createElementNS(svgNS, "svg")
-    svg.setAttribute("width", this.canvas.width.toString())
-    svg.setAttribute("height", this.canvas.height.toString())
-    const currentArtboard = this.objects.find(obj => obj instanceof Artboard)
-    if (currentArtboard) {
-      const { x, y, width, height } = currentArtboard.boundingBox
-      svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`)
-    } else {
-      svg.setAttribute("viewBox", `0 0 ${this.canvas.width} ${this.canvas.height}`)
-    }
-
-    for (const object of this.objects) {
-      if ("toSVG" in object && typeof object.toSVG === "function") {
-        const path = object.toSVG()
-        svg.appendChild(path)
-      }
-    }
-
-    const serializer = new XMLSerializer()
-    return serializer.serializeToString(svg)
-  }
-
-  public importSVG(svg: string): void {
-    const parser = new DOMParser()
-    const svgDoc = parser.parseFromString(svg, "image/svg+xml")
-    const svgElement = svgDoc.documentElement
-
-    if (svgElement.tagName !== "svg") {
-      throw new Error("Invalid SVG: Root element is not <svg>")
-    }
-
-    // Clear existing objects
-    this.objects = []
-
-    // Process path elements and groups
-    const processElement = (element: Element) => {
-      if (element.tagName === "path") {
-        const pathLayer = PathLayer.fromSVGPath(element as SVGPathElement, this.objects.length)
-        this.objects.push(pathLayer)
-      } else if (element.tagName === "g") {
-        Array.from(element.children).forEach(processElement)
-      }
-    }
-
-    Array.from(svgElement.children).forEach(processElement)
-    this.redraw()
+  public toSVG(): string {
+    return toSVG(this.objects, this.canvas.width, this.canvas.height)
   }
 
   public dispose(): void {

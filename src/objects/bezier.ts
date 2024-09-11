@@ -372,7 +372,7 @@ export class PathLayer implements CanvasObject {
       }
     }
     const currentColor = getComputedStyle(ctx.canvas).getPropertyValue("color")
-    ctx.fillStyle = currentColor
+    ctx.fillStyle = this.fill === "currentColor" ? currentColor : (this.fill ?? currentColor)
     // ctx.stroke();
     ctx.fill()
     ctx.closePath()

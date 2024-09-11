@@ -36,4 +36,16 @@ export class RedCircle implements CanvasObject {
     circle.setAttribute("stroke-width", "1")
     return circle
   }
+
+  public static fromSVG(element: SVGCircleElement, id: number): RedCircle {
+    const circle = new RedCircle(id)
+    const cx = parseFloat(element.getAttribute("cx") || "0")
+    const cy = parseFloat(element.getAttribute("cy") || "0")
+    const r = parseFloat(element.getAttribute("r") || "0")
+
+    circle.size = { width: r * 2, height: r * 2 }
+    circle.translation = { x: cx - r, y: cy - r }
+
+    return circle
+  }
 }

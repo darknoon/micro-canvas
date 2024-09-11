@@ -49,14 +49,16 @@ export class ToolShelf extends EventTarget implements Disposable {
   private handleKeyDown(event: KeyboardEvent) {
     if (Array.isArray(this.items)) {
       for (const item of this.items) {
-        if (item.shortcut && event.key === item.shortcut) {
-          this.handleSelectTool(item.id, false)
-          event.preventDefault()
-          return
-        } else if (event.key === item.shortcut?.toLowerCase()) {
-          this.handleSelectTool(item.id, false)
-          event.preventDefault()
-          return
+        if (!event.metaKey && !event.ctrlKey) {
+          if (item.shortcut && event.key === item.shortcut) {
+            this.handleSelectTool(item.id, false)
+            event.preventDefault()
+            return
+          } else if (event.key === item.shortcut?.toLowerCase()) {
+            this.handleSelectTool(item.id, false)
+            event.preventDefault()
+            return
+          }
         }
       }
     }

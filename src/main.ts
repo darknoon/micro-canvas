@@ -28,7 +28,7 @@ const toolbarElem = parent.querySelector<HTMLDivElement>("#toolbar")!
 const topBar = new TopBar(topBarElem)
 
 topBar.addEventListener("copy", () => {
-  const text = editor.exportSVG()
+  const text = editor.toSVG()
   navigator.clipboard
     .writeText(text)
     .then(() => {
@@ -45,7 +45,7 @@ let editor = new CanvasEditor(canvasContainerElem)
 editor.addEventListener(Events.CONTENT_CHANGED, updatePreview)
 
 function updatePreview() {
-  const text = editor.exportSVG()
+  const text = editor.toSVG()
   const preview = canvasContainerElem.querySelector<HTMLDivElement>("#preview")!
   preview.innerHTML = text // Clear previous content and add new SVG
   const svg = preview.querySelector("svg")
@@ -62,7 +62,7 @@ tools.addEventListener("toolSelected", () => {
 })
 
 topBar.addEventListener("save", () => {
-  const text = editor.exportSVG()
+  const text = editor.toSVG()
   const blob = new Blob([text], { type: "image/svg+xml" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
