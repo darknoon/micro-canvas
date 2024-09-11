@@ -586,7 +586,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.dispatchContentChanged()
   }
 
-  private onObjectDragUp(e: PointerEvent): void {
+  private onObjectDragUp(_e: PointerEvent): void {
     this.isObjectDragging = false
     this.endEvent()
     this.redraw()
@@ -628,7 +628,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.updateCursor()
   }
 
-  private onSelectionDragUp(e: PointerEvent): void {
+  private onSelectionDragUp(_e: PointerEvent): void {
     this.isSelectionDragging = false
     this.selectionDraggingOrigin = null
     this.endEvent()
@@ -687,7 +687,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.redraw()
   }
 
-  private onBezierPointDragUp(e: PointerEvent): void {
+  private onBezierPointDragUp(_e: PointerEvent): void {
     this.isDraggingBezierPoints = false
     this.endEvent()
     this.redraw()
