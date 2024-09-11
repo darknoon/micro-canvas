@@ -163,7 +163,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     return null
   }
 
-  private outerCoords(e: MouseEvent): Point2D {
+  private outerCoords(e: PointerEvent | MouseEvent): Point2D {
     const bb = this.canvas.getBoundingClientRect()
     return {
       x: e.clientX - bb.left,
@@ -171,7 +171,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     }
   }
 
-  private canvasCoords(e: MouseEvent): Point2D {
+  private canvasCoords(e: PointerEvent | MouseEvent): Point2D {
     const { x: localX, y: localY } = this.outerCoords(e)
     return {
       x: localX + this.scrollX,
@@ -366,11 +366,11 @@ export class CanvasEditor extends EventTarget implements Disposable {
       this.redraw()
     }
   }
-  private onMouseDown(e: MouseEvent): void {
+  private onPointerDown(e: PointerEvent): void {
     const { x: localX, y: localY } = this.outerCoords(e)
     const DS = this.DS
     if (e.button === 0) {
-      // Left mouse button
+      // Primary button (left click or touch)
       const canvasX = localX + this.scrollX
       const canvasY = localY + this.scrollY
 
@@ -397,13 +397,13 @@ export class CanvasEditor extends EventTarget implements Disposable {
           this.lastDragX = localX
           this.lastDragY = localY
           this.beginEvent()
-          const onMouseMove = this.onBezierPointDrag.bind(this)
-          const onMouseUp = this.onBezierPointDragUp.bind(this)
-          window.addEventListener("mousemove", onMouseMove)
-          window.addEventListener("mouseup", onMouseUp)
+          const onPointerMove = this.onBezierPointDrag.bind(this)
+          const onPointerUp = this.onBezierPointDragUp.bind(this)
+          window.addEventListener("pointermove", onPointerMove)
+          window.addEventListener("pointerup", onPointerUp)
           this.eventCleanups.push(() => {
-            window.removeEventListener("mousemove", onMouseMove)
-            window.removeEventListener("mouseup", onMouseUp)
+            window.removeEventListener("pointermove", onPointerMove)
+            window.removeEventListener("pointerup", onPointerUp)
           })
           if (wasSelected) {
             // Start dragging the bezier point
@@ -439,13 +439,13 @@ export class CanvasEditor extends EventTarget implements Disposable {
         this.lastDragY = localY
 
         this.beginEvent()
-        const onMouseMove = this.onObjectDrag.bind(this)
-        const onMouseUp = this.onObjectDragUp.bind(this)
-        window.addEventListener("mousemove", onMouseMove)
-        window.addEventListener("mouseup", onMouseUp)
+        const onPointerMove = this.onObjectDrag.bind(this)
+        const onPointerUp = this.onObjectDragUp.bind(this)
+        window.addEventListener("pointermove", onPointerMove)
+        window.addEventListener("pointerup", onPointerUp)
         this.eventCleanups.push(() => {
-          window.removeEventListener("mousemove", onMouseMove)
-          window.removeEventListener("mouseup", onMouseUp)
+          window.removeEventListener("pointermove", onPointerMove)
+          window.removeEventListener("pointerup", onPointerUp)
         })
       } else {
         this.isSelectionDragging = true
@@ -457,17 +457,17 @@ export class CanvasEditor extends EventTarget implements Disposable {
 
         // Listen on the window to capture mouse move/up events outside the canvas
         this.beginEvent()
-        const onMouseMove = this.onSelectionDrag.bind(this)
-        const onMouseUp = this.onSelectionDragUp.bind(this)
-        window.addEventListener("mousemove", onMouseMove)
-        window.addEventListener("mouseup", onMouseUp)
+        const onPointerMove = this.onSelectionDrag.bind(this)
+        const onPointerUp = this.onSelectionDragUp.bind(this)
+        window.addEventListener("pointermove", onPointerMove)
+        window.addEventListener("pointerup", onPointerUp)
         this.eventCleanups.push(() => {
-          window.removeEventListener("mousemove", onMouseMove)
-          window.removeEventListener("mouseup", onMouseUp)
+          window.removeEventListener("pointermove", onPointerMove)
+          window.removeEventListener("pointerup", onPointerUp)
         })
       }
     } else if (e.button === 1) {
-      // Middle mouse button
+      // Middle button (usually not applicable on mobile)
 
       this.isMiddleDragging = true
       this.lastDragX = localX
@@ -475,13 +475,13 @@ export class CanvasEditor extends EventTarget implements Disposable {
 
       // Listen on the window to capture mouse move/up events outside the canvas
       this.beginEvent()
-      const onMouseMove = this.onMiddleDrag.bind(this)
-      const onMouseUp = this.onMiddleDragUp.bind(this)
-      window.addEventListener("mousemove", onMouseMove)
-      window.addEventListener("mouseup", onMouseUp)
+      const onPointerMove = this.onMiddleDrag.bind(this)
+      const onPointerUp = this.onMiddleDragUp.bind(this)
+      window.addEventListener("pointermove", onPointerMove)
+      window.addEventListener("pointerup", onPointerUp)
       this.eventCleanups.push(() => {
-        window.removeEventListener("mousemove", onMouseMove)
-        window.removeEventListener("mouseup", onMouseUp)
+        window.removeEventListener("pointermove", onPointerMove)
+        window.removeEventListener("pointerup", onPointerUp)
       })
     }
   }
@@ -513,7 +513,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     return undefined
   }
 
-  private onMouseMove(e: MouseEvent): void {
+  private onPointerMove(e: PointerEvent): void {
     if (this.isEditingBezier && this._activeToolId === Tool.PEN) {
       const bzo = this.bezierEditingObject
       if (!bzo) return
@@ -564,7 +564,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     }
   }
 
-  private onObjectDrag(e: MouseEvent): void {
+  private onObjectDrag(e: PointerEvent): void {
     if (!this.isObjectDragging) throw new Error("Object dragging is not active")
 
     const { x: localX, y: localY } = this.outerCoords(e)
@@ -586,13 +586,13 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.dispatchContentChanged()
   }
 
-  private onObjectDragUp(): void {
+  private onObjectDragUp(e: PointerEvent): void {
     this.isObjectDragging = false
     this.endEvent()
     this.redraw()
   }
 
-  private onSelectionDrag(e: MouseEvent): void {
+  private onSelectionDrag(e: PointerEvent): void {
     if (this.isSelectionDragging) {
       const b = this.selectionDraggingOrigin
       if (!b) throw new Error("Selection dragging origin is null")
@@ -628,14 +628,14 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.updateCursor()
   }
 
-  private onSelectionDragUp(): void {
+  private onSelectionDragUp(e: PointerEvent): void {
     this.isSelectionDragging = false
     this.selectionDraggingOrigin = null
     this.endEvent()
     this.redraw()
   }
 
-  private onBezierPointDrag(e: MouseEvent): void {
+  private onBezierPointDrag(e: PointerEvent): void {
     if (!this.isDraggingBezierPoints) return
 
     const { x: localX, y: localY } = this.outerCoords(e)
@@ -687,13 +687,13 @@ export class CanvasEditor extends EventTarget implements Disposable {
     this.redraw()
   }
 
-  private onBezierPointDragUp(): void {
+  private onBezierPointDragUp(e: PointerEvent): void {
     this.isDraggingBezierPoints = false
     this.endEvent()
     this.redraw()
   }
 
-  private onMiddleDrag(e: MouseEvent): void {
+  private onMiddleDrag(e: PointerEvent): void {
     if (this.isMiddleDragging) {
       const { x: localX, y: localY } = this.outerCoords(e)
       const deltaX = localX - this.lastDragX!
@@ -706,7 +706,7 @@ export class CanvasEditor extends EventTarget implements Disposable {
     }
   }
 
-  private onMiddleDragUp(e: MouseEvent): void {
+  private onMiddleDragUp(e: PointerEvent): void {
     if (e.button === 1 /* Middle mouse button */) {
       this.isMiddleDragging = false
       this.endEvent()
@@ -730,16 +730,16 @@ export class CanvasEditor extends EventTarget implements Disposable {
     window.addEventListener("keydown", onKeyDown)
     this.disposers.push(() => window.removeEventListener("keydown", onKeyDown))
 
-    const onMouseDown = this.onMouseDown.bind(this)
-    this.canvas.addEventListener("mousedown", onMouseDown)
+    const onPointerDown = this.onPointerDown.bind(this)
+    this.canvas.addEventListener("pointerdown", onPointerDown)
     this.disposers.push(() => {
-      this.canvas.removeEventListener("mousedown", onMouseDown)
+      this.canvas.removeEventListener("pointerdown", onPointerDown)
     })
 
-    const onMouseMove = this.onMouseMove.bind(this)
-    this.canvas.addEventListener("mousemove", onMouseMove)
+    const onPointerMove = this.onPointerMove.bind(this)
+    this.canvas.addEventListener("pointermove", onPointerMove)
     this.disposers.push(() => {
-      this.canvas.removeEventListener("mousemove", onMouseMove)
+      this.canvas.removeEventListener("pointermove", onPointerMove)
     })
 
     const onDoubleClick = this.onDoubleClick.bind(this)
